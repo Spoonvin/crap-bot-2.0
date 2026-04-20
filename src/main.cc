@@ -25,11 +25,9 @@ i32 main(i32 argc, char** argv) {
   Bot* bot = new Bot();
   Human* human = new Human();
 
-  //Arena arena(&game, human, bot);
+  Arena arena(&game, human, bot);
 
-  //ArenaResult result = arena.play();
-
-  bot->select_best(game);
+  ArenaResult result = arena.play();
 
   gui_ctx.quit();
   return 0;
