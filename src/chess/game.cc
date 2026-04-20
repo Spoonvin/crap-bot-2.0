@@ -85,20 +85,6 @@ void Game::make_move(Move move) {
   next_turn();
 }
 
-u64 Game::hash() const {
-  u64 hash = board.hash();
-
-  hash ^= turn;
-  hash ^= players[WHITE].cstl_flags << 1;
-  hash ^= players[BLACK].cstl_flags << 9;
-
-  if (ep_pos != -1) {
-    hash ^= pos_mask(ep_pos);
-  }
-
-  return hash;
-}
-
 void Game::next_turn() {
   // Toggle active player
   turn = Color(!turn);

@@ -30,8 +30,9 @@ struct Game {
   u8 hm_clock;
   u32 fm_counter;
 
+  u64 hash;
+
   void make_move(Move move);
-  u64 hash() const;
 
  private:
 

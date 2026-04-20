@@ -2,10 +2,12 @@
 
 #include "chess/game.h"
 #include "chess/player.h"
+#include "search/zobrist_hash.h"
 
 Game Game::from_fen(const char* fen) {
   Game game{};
   game._from_fen(fen);
+  game.hash = gen_zob_hash(game);
   return game;
 }
 

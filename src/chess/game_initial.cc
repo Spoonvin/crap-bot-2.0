@@ -1,8 +1,10 @@
 #include "chess/game.h"
+#include "search/zobrist_hash.h"
 
 Game Game::initial() {
   Game game{};
   game._initial();
+  game.hash = gen_zob_hash(game);
   return game;
 }
 
