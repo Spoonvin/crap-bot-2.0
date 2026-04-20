@@ -69,9 +69,9 @@ Pos invert_pos(Pos pos) {
 }
 
 i32 eval_game(Game& game) {
-    Bitboard bitboard_white, bitboard_black;
+    Bitboard bitboard_white = game.players[WHITE].bb;
+    Bitboard bitboard_black = game.players[BLACK].bb;
 
-    game.board.store_bitboards(bitboard_white, bitboard_black);
 
     i32 white_score = 0;
     i32 black_score = 0;

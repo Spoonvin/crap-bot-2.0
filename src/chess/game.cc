@@ -2,6 +2,7 @@
 
 #include "chess/board/mask_operations.h"
 #include "chess/move/piece/king.h"
+#include "search/zobrist_hash.h"
 
 void Game::make_move(Move move) {
   Player& act = players[turn];
@@ -36,6 +37,9 @@ void Game::make_move(Move move) {
   }
 
   // Reset en passant target square (this is set by pawn_effect)
+  // And update hash
+  if (ep_pos >= 0)
+    update_hash(sq_key_map[ep_pos][EP_ZOB_INDEX]);
   ep_pos = -1;
 
   // Special side-effects for some pieces
@@ -66,20 +70,43 @@ void Game::make_move(Move move) {
   Mask black_q_rook = 0x100000000000000ull;
   Mask black_k_rook = 0x8000000000000000ull;
 
-  if (!(white_q_rook & players[WHITE].bb[ROOK])) {
-    players[WHITE].set_lrook_moved();
-  }
 
-  if (!(white_k_rook & players[WHITE].bb[ROOK])) {
-    players[WHITE].set_rrook_moved();
-  }
+  if (turn == WHITE) {
+    if (!(black_q_rook & players[BLACK].bb[ROOK])) {
 
-  if (!(black_q_rook & players[BLACK].bb[ROOK])) {
-    players[BLACK].set_lrook_moved();
-  }
+      // Update hash
+      if (!players[BLACK].king_moved() && !players[BLACK].lrook_moved())
+        update_hash(b_cstl_left_key);
 
-  if (!(black_k_rook & players[BLACK].bb[ROOK])) {
-    players[BLACK].set_rrook_moved();
+      players[BLACK].set_lrook_moved();
+    }
+
+    if (!(black_k_rook & players[BLACK].bb[ROOK])) {
+
+      // Update hash
+      if (!players[BLACK].king_moved() && !players[BLACK].rrook_moved())
+        update_hash(b_cstl_right_key);
+
+      players[BLACK].set_rrook_moved();
+    }
+  } else {
+    if (!(white_q_rook & players[WHITE].bb[ROOK])) {
+
+      // Update hash
+      if (!players[WHITE].king_moved() && !players[WHITE].lrook_moved())
+        update_hash(w_cstl_left_key);
+      
+      players[WHITE].set_lrook_moved();
+    }
+
+    if (!(white_k_rook & players[WHITE].bb[ROOK])) {
+
+      // Update hash
+      if (!players[WHITE].king_moved() && !players[WHITE].rrook_moved())
+        update_hash(w_cstl_right_key);
+
+      players[WHITE].set_rrook_moved();
+    }
   }
 
   next_turn();
@@ -88,6 +115,8 @@ void Game::make_move(Move move) {
 void Game::next_turn() {
   // Toggle active player
   turn = Color(!turn);
+
+  update_hash(acting_player_key);
 
   // Increment fullmove counter
   // Should be one for the first round
@@ -105,14 +134,22 @@ void Game::move_piece(Player& player, Piece piece, Pos from, Pos to) {
     Square square = board[to];
     Player& captured_player = players[stc(square)];
     captured_player.bb[stp(square)] ^= pos_mask(to);
+
+    update_hash(square, to);
   }
 
   // Update bitboard
   player.bb[piece] ^= pos_mask(from) | pos_mask(to);
 
+
   // Update board
   board[to] = board[from];
   board[from] = EMPTY_SQUARE;
+
+  // Update hash
+  Square sq = board[to];
+  update_hash(sq, from);
+  update_hash(sq, to);
 }
 
 // Move types
@@ -142,7 +179,11 @@ void Game::make_promo(
     Square square = board[to];
     Player& captured_player = players[stc(square)];
     captured_player.bb[stp(square)] ^= pos_mask(to);
+
+    update_hash(square, to);
   }
+
+  Square org = board[from];
 
   // Update board
   board[from] = EMPTY_SQUARE;
@@ -151,12 +192,19 @@ void Game::make_promo(
   // Update bitboards
   act.bb[PAWN] ^= pos_mask(from);
   act.bb[promo_piece] ^= pos_mask(to);
+
+  // Update hash
+  update_hash(board[to], to);
+  update_hash(org, from);
 }
 
 void Game::make_ep(Player& act, Player& wait, Pos from, Pos to) {
   Pos dp_pos = (from & ~7) |  // Row of from-postion
                (ep_pos & 7);  // Column of en-passant-position
-
+  
+  // Update hash for double pushed pawn
+  update_hash(board[dp_pos], dp_pos);
+  
   // Capture double pushed pawn
   board[dp_pos] = EMPTY_SQUARE;
   wait.bb[PAWN] ^= pos_mask(dp_pos);
@@ -207,10 +255,25 @@ void Game::pawn_effect(Pos from, Pos to) {
   // If double push, update target en passant square
   if ((from ^ to) == 16) {
     ep_pos = (from + to) >> 1;
+    update_hash(sq_key_map[ep_pos][EP_ZOB_INDEX]);
   }
 }
 
 void Game::king_effect(Player& act) {
+
+  // Update hash
+  if (!act.king_moved()) {
+
+    if (!act.lrook_moved()) {
+      u64 key = (this->turn == WHITE) ? w_cstl_left_key : b_cstl_left_key;
+      update_hash(key);
+    }
+    if (!act.rrook_moved()) {
+      u64 key = (this->turn == WHITE) ? w_cstl_right_key : b_cstl_right_key;
+      update_hash(key);
+    }
+  }
+
   // Update castling ability
   act.set_king_moved();
 }
@@ -222,10 +285,18 @@ void Game::rook_effect(Player& act, Pos from) {
   // Update castling ability
   switch (norm_from) {
     case 0: {
+      if (!act.king_moved() && !act.lrook_moved()) {
+        u64 key = (this->turn == WHITE) ? w_cstl_left_key : b_cstl_left_key;
+        update_hash(key);
+      }
       act.set_lrook_moved();
       break;
     }
     case 7: {
+      if (!act.king_moved() && !act.rrook_moved()) {
+        u64 key = (this->turn == WHITE) ? w_cstl_right_key : b_cstl_right_key;
+        update_hash(key);
+      }
       act.set_rrook_moved();
       break;
     }
@@ -368,4 +439,15 @@ void Game::invert() {
 
   players[WHITE].cstl_flags = players[BLACK].cstl_flags;
   players[BLACK].cstl_flags = white_cstl_flags;
+}
+
+void Game::update_hash(Square sq, Pos pos) {
+  Piece piece = stp(sq);
+  Color c = stc(sq);
+  u8 idx = (c == WHITE) ? piece : piece+PIECE_COUNT;
+  this->hash ^= sq_key_map[pos][idx];
+}
+
+void Game::update_hash(u64 key) {
+  this->hash ^= key;
 }

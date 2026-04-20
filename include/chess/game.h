@@ -73,6 +73,9 @@ struct Game {
 
   void invert();
 
+  void update_hash(Square sq, Pos pos);
+  void update_hash(u64 key);
+
   // In game_fen.cc
 
   // Undefined behavior for malformed fen strings
