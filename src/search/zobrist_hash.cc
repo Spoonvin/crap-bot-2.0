@@ -1,5 +1,12 @@
 #include "search/zobrist_hash.h"
-#include "chess/game.h"
+
+u64 sq_key_map[64][PIECE_COUNT*2 + 1];
+
+u64 acting_player_key; // If white to play
+u64 w_cstl_left_key;
+u64 w_cstl_right_key;
+u64 b_cstl_left_key;
+u64 b_cstl_right_key;
 
 void init_hash_key_map() {
     std::random_device rd;
