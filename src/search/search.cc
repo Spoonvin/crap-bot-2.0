@@ -3,10 +3,13 @@
 #include "search/evaluation.h"
 #include "chess/move/movegen.h"
 #include "chess/move/move.h"
+#include "search/trans_table.h"
+#include "search/zobrist_hash.h"
 
 #include <omp.h>
 #include <limits>
 #include <chrono>
+#include <iostream>
 
 #define MAX_PLY 30
 
@@ -15,18 +18,20 @@ struct MoveMvvLvaScore{
     i32 score;
 };
 
-Searcher::Searcher(Game& game, u8 depth) {
-    base_game = game;
+Searcher::Searcher(u8 depth) {
     base_depth = depth;
     best_move.data = 0;
     stop_search = false;
+
+    trans_table.init();
 }
 
-Searcher::Searcher(Game& game, u32 search_time) {
-    base_game = game;
+Searcher::Searcher(u32 search_time) {
     this->search_time = search_time;
     best_move.data = 0;
     stop_search = false;
+
+    trans_table.init();
 }
 
 i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
@@ -41,6 +46,15 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
     if (game.is_draw()) {
         return 0;
     }
+
+    // Transposition table lookup
+    i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta);
+    if (tt_val != UNKNOWN_TT_VALUE) {
+        return tt_val;
+    }
+
+    // Track transposition table type
+    TTType tt_type = UPPER;
 
     if (depth <= 0) return quiescence(alpha, beta, ply, game);
 
@@ -71,21 +85,22 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
             if (ply == 0) best_move = move;
 
             if (branch_val > alpha) {
+                tt_type = EXACT;
                 alpha = branch_val;
             }
         }
 
         if(branch_val >= beta) {
-            break;
+            if (!stop_search)
+                record_trans_table(game.hash, depth, beta, LOWER);
+            return beta;
         }
     }
 
-    return best_val;
-}
+    if (!stop_search)
+        record_trans_table(game.hash, depth, alpha, tt_type);
 
-Move Searcher::get_best_move() {
-    alpha_beta(MIN_VALUE, MAX_VALUE, base_depth, 0, base_game);
-    return best_move;
+    return alpha;
 }
 
 bool Searcher::check_deadline() {
@@ -96,15 +111,16 @@ bool Searcher::check_deadline() {
     return true;
 }
 
-Move Searcher::get_best_move_iterative() {
+Move Searcher::get_best_move(Game& game) {
     
+    stop_search = false;
     deadline = std::chrono::steady_clock::now()
          + std::chrono::milliseconds(search_time);
 
-    u8 start_depth = 1;
+    u8 iter_depth = 1;
 
     MoveList moves;
-    GenResult gen_result = gen_legal(base_game, moves);
+    GenResult gen_result = gen_legal(game, moves);
 
     while (std::chrono::steady_clock::now() < deadline) {
 
@@ -115,10 +131,10 @@ Move Searcher::get_best_move_iterative() {
         for (u8 i = 0; i < gen_result.count; ++i) {
 
             Move move = moves[i];
-            Game branch_game = base_game;
+            Game branch_game = game;
             branch_game.make_move(move);
 
-            i32 branch_val = -alpha_beta(-beta, -alpha, start_depth, 1, branch_game);
+            i32 branch_val = -alpha_beta(-beta, -alpha, iter_depth, 1, branch_game);
 
             if (stop_search) break;
 
@@ -132,15 +148,10 @@ Move Searcher::get_best_move_iterative() {
             best_move = current_best_move;
         }
 
-        start_depth++;
+        iter_depth++;
     }
 
     return best_move;
-}
-
-Move get_best_move_iterative(Game& game, u32 search_time) {
-    Searcher searcher(game, search_time);
-    return searcher.get_best_move_iterative();
 }
 
 
@@ -219,8 +230,33 @@ void Searcher::mvv_lva_reordering(MoveList& moves, u8 length, Game& game) {
     }
 }
 
+i32 Searcher::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
 
-Move get_best_move(Game& game, u8 depth) {
-    Searcher searcher(game, depth);
-    return searcher.get_best_move();
+    TTEntry entry = trans_table.get(hash);
+
+    if (hash == entry.hash && entry.valid) {
+        if (entry.depth >= depth) {
+
+            if (entry.type == EXACT)
+
+                return entry.score;
+
+            if ((entry.type == UPPER) && (entry.score <= alpha))
+
+                return alpha;
+
+            if ((entry.type == LOWER) && (entry.score >= beta))
+
+                return beta;
+
+        }
+
+    }
+
+    return UNKNOWN_TT_VALUE;
+}
+
+void Searcher::record_trans_table(u64 hash, u8 depth, i32 score, TTType type) {
+    TTEntry entry = TTEntry(hash, Move::null(), depth, score, type);
+    trans_table.put(entry);
 }

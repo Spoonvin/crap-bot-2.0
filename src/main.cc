@@ -8,10 +8,13 @@
 #include "search/evaluation.h"
 #include "search/search.h"
 #include "arena/arena.h"
+#include "search/zobrist_hash.h"
 
 i32 main(i32 argc, char** argv) {
 
   gui_ctx.init(600);
+
+  init_hash_key_map();
 
   Game game;
   game = Game::initial();

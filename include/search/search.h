@@ -2,15 +2,11 @@
 #include "chess/move/move.h"
 #include "chess/game.h"
 #include "chess/move/movegen.h"
+#include "search/trans_table.h"
 
 #include <chrono>
 
-Move get_best_move(Game& game, u8 depth);
-Move get_best_move_iterative(Game& game, u32 search_time);
-
 struct Searcher{
-    Game base_game;
-
     Move best_move;
 
     u8 base_depth;
@@ -20,13 +16,16 @@ struct Searcher{
 
     bool stop_search;
 
+    TransTable trans_table;
+
+    i32 node_count;
+
     public:
 
-    Searcher(Game& game, u8 depth);
-    Searcher(Game& game, u32 search_time);
+    Searcher(u8 depth);
+    Searcher(u32 search_time);
 
-    Move get_best_move();
-    Move get_best_move_iterative();
+    Move get_best_move(Game& game);
 
     private:
 
@@ -38,4 +37,8 @@ struct Searcher{
 
     // Returns true if we are past deadline
     bool check_deadline();
+
+    i32 probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta);
+    void record_trans_table(u64 hash, u8 depth, i32 score, TTType type);
+
 };

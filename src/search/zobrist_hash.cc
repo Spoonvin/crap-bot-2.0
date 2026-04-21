@@ -1,4 +1,5 @@
 #include "search/zobrist_hash.h"
+#include <iostream>
 
 u64 sq_key_map[64][PIECE_COUNT*2 + 1];
 

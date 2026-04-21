@@ -3,6 +3,8 @@
 
 #define DEPTH 4
 
+Bot::Bot() : searcher(Searcher(u32(2000))) {}
+
 Move Bot::select_best(Game& game) {
-    return get_best_move_iterative(game, 5000);
+    return searcher.get_best_move_iterative(game);
 }
