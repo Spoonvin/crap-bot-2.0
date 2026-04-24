@@ -6,8 +6,9 @@
 
 #include <chrono>
 
+#define MAX_PLY 50
+
 struct Searcher{
-    Move best_move;
 
     u8 base_depth;
 
@@ -25,6 +26,8 @@ struct Searcher{
     Searcher(u8 depth);
     Searcher(u32 search_time);
 
+    ~Searcher();
+
     Move get_best_move(Game& game);
 
     private:
@@ -39,6 +42,11 @@ struct Searcher{
     bool check_deadline();
 
     i32 probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta);
-    void record_trans_table(u64 hash, u8 depth, i32 score, TTType type);
+    void record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type);
 
+};
+
+struct ThreadData {
+    Game game;
+    Searcher searcher;
 };

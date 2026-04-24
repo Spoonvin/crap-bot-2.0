@@ -2,6 +2,9 @@
 #include "model/model.h"
 #include "gui/gui.h"
 #include "chess/move/movegen.h"
+#include "search/zobrist_hash.h"
+
+#include <iostream>
 
 Arena::Arena(Game* game, Model* white, Model* black) {
     this->game = game;
