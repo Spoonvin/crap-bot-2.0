@@ -5,7 +5,6 @@
 #include "gui/gui.h"
 #include "model/human.h"
 #include "model/bot.h"
-#include "model/bot_old.h"
 #include "search/evaluation.h"
 #include "search/search.h"
 #include "arena/arena.h"
