@@ -72,13 +72,6 @@ void test_fen(char** argv) {
   Game game;
   game = Game::from_fen(fen);
 
-  gui_ctx.init(600);
-
-  if (gui_ctx.is_init()) {
-    gui_ctx.render_game(game, -1);
-    gui_ctx.present();
-  }
-
   Bot* bot= new Bot((u32)time_limit);
 
   Move move = bot->select_best(game);
@@ -88,7 +81,6 @@ void test_fen(char** argv) {
 
   std::cout << "Best move: " << buffer << "\n";
 
-  gui_ctx.quit();
 }
 
 const Command commands[] = {
@@ -100,8 +92,6 @@ const int numCommands = sizeof(commands) / sizeof(Command);
 
 i32 main(i32 argc, char** argv) {
 
-  init_hash_key_map();
-
   if (argc < 2) {
     std::cout << "Usage: " << argv[0] << " [command] [options]\n";
     std::cout << "Available commands:\n";
@@ -110,6 +100,8 @@ i32 main(i32 argc, char** argv) {
     }
     return 1;
   } 
+
+  init_hash_key_map();
 
   const char* command_name = argv[1];
   const char* options = (argc > 2) ? argv[2] : "";
@@ -125,9 +117,3 @@ i32 main(i32 argc, char** argv) {
   return 1;
 }
 
-  /*
-  Bot* bot = new Bot();
-  BotOld* bot_old = new BotOld();
-
-  Benchmark benchmark(bot, bot_old);
-  benchmark.run_benchmark(game, 100);*/

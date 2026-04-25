@@ -9,6 +9,7 @@
 #include <limits>
 #include <chrono>
 #include <iostream>
+#include <thread>
 
 
 struct MoveMvvLvaScore{
@@ -38,10 +39,8 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
 
     if (stop_search) return 0;
 
-    this->node_count++;
-
     // Check deadline every 4th ply (for performance)
-    if ((ply & 0b11) == 0b11) {
+    if ((ply & 0b111) == 0b101) {
         if (check_deadline()) return 0;
     }
 
@@ -74,7 +73,8 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
         }
     }
 
-    mvv_lva_reordering(moves, gen_result.count, game);
+    Move pv_move = this->trans_table.get_pv_move(game.hash);
+    mvv_lva_reordering(moves, pv_move, gen_result.count, game);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
@@ -83,6 +83,9 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
 
         i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game);
 
+        if (stop_search)
+            return 0;
+        
         if (branch_val > best_val) {
             best_val = branch_val;
             best_move = move;
@@ -94,15 +97,12 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
         }
 
         if(branch_val >= beta) {
-            if (!stop_search)
-                record_trans_table(game.hash, depth, best_move, beta, LOWER);
-                
+            record_trans_table(game.hash, depth, best_move, beta, LOWER);
             return beta;
         }
     }
 
-    if (!stop_search)
-        record_trans_table(game.hash, depth, best_move, alpha, tt_type);
+    record_trans_table(game.hash, depth, best_move, alpha, tt_type);
 
     return alpha;
 }
@@ -114,52 +114,6 @@ bool Searcher::check_deadline() {
     stop_search = true;
     return true;
 }
-
-/*
-Move Searcher::get_best_move(Game& game) {
-    
-    stop_search = false;
-    deadline = std::chrono::steady_clock::now()
-         + std::chrono::milliseconds(search_time);
-
-    u8 iter_depth = 1;
-
-    MoveList moves;
-    GenResult gen_result = gen_legal(game, moves);
-
-    while (std::chrono::steady_clock::now() < deadline) {
-
-        Move current_best_move = Move::null();
-        i32 alpha = MIN_VALUE;
-        i32 beta = MAX_VALUE;
-
-        for (u8 i = 0; i < gen_result.count; ++i) {
-
-            Move move = moves[i];
-            Game branch_game = game;
-            branch_game.make_move(move);
-
-            i32 branch_val = -alpha_beta(-beta, -alpha, iter_depth, 1, branch_game);
-
-            if (stop_search) break;
-
-            if (branch_val > alpha) {
-                alpha = branch_val;
-                current_best_move = move;
-            }
-        }
-
-        if (!stop_search) {
-            pv_table[0] = current_best_move;
-        }
-
-        iter_depth++;
-    }
-
-    this->trans_table.age++;
-
-    return pv_table[0];
-}*/
 
 Move Searcher::get_best_move(Game& game) {
     
@@ -187,8 +141,6 @@ Move Searcher::get_best_move(Game& game) {
 
 i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
-    this->node_count++;
-
     if (game.is_draw()) {
         return 0;
     }
@@ -215,7 +167,7 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return -MATE_VALUE + ply;
     }
 
-    mvv_lva_reordering(moves, gen_result.count, game);
+    mvv_lva_reordering(moves, Move::null(), gen_result.count, game);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
@@ -238,12 +190,15 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
     return best_val;
 }
 
-void Searcher::mvv_lva_reordering(MoveList& moves, u8 length, Game& game) {
+void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game) {
     MoveMvvLvaScore move_scores[length];
 
     for (u8 i = 0; i < length; i++) {
         Move move = moves[i];
-        move_scores[i] = {move, mvv_lva_score(move, game)};
+        i32 move_score = (move.data == pv_move.data) ? 
+            MAX_VALUE : mvv_lva_score(move, game);
+
+        move_scores[i] = {move, move_score};
     }
 
     // Insertion sort (descending score)
@@ -297,3 +252,46 @@ void Searcher::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTTy
     trans_table.put(entry, hash);
 }
 
+void thread_search(Searcher* searcher, Game game) {
+
+    u8 iter_depth = 1;
+
+    while (std::chrono::steady_clock::now() < searcher->deadline) {
+
+        searcher->alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game);
+
+        iter_depth++;
+    }
+
+    std::cout << "Depth: " << (int)iter_depth - 1 << "\n";
+
+    return;
+}
+
+Move Searcher::get_best_move_parallel(Game& game) {
+
+    stop_search = false;
+    deadline = std::chrono::steady_clock::now()
+         + std::chrono::milliseconds(search_time);
+
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < 3; i++) {
+        threads.emplace_back(thread_search, this, game);
+    }
+
+    u8 iter_depth = 1;
+
+    while (std::chrono::steady_clock::now() < this->deadline) {
+
+        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game);
+
+        iter_depth++;
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    return this->trans_table.get_pv_move(game.hash);
+}

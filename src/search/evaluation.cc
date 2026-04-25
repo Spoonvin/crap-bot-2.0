@@ -2,7 +2,6 @@
 #include "chess/game.h"
 #include <iostream>
 
-
 const i8 b_pawn_square_mod[64] = {
     0,  0,  0,  0,  0,  0,  0,  0,
     50, 100,60, 80, 70, 100,20,  0,
@@ -75,7 +74,6 @@ i32 eval_game(Game& game) {
 
     i32 white_score = 0;
     i32 black_score = 0;
-
     for (u8 piece = PAWN; piece < PIECE_COUNT; piece++) {
         switch (piece) {
             case PAWN:

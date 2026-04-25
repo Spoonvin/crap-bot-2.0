@@ -5,6 +5,7 @@
 #include "search/trans_table.h"
 
 #include <chrono>
+#include <atomic>
 
 #define MAX_PLY 50
 
@@ -29,14 +30,15 @@ struct Searcher{
     ~Searcher();
 
     Move get_best_move(Game& game);
-
-    private:
+    Move get_best_move_parallel(Game& game);
 
     i32 alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game);
 
+    private:
+
     i32 quiescence(i32 alpha, i32 beta, u8 ply, Game& game);
 
-    void mvv_lva_reordering(MoveList& moves, u8 length, Game& game);
+    void mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game);
 
     // Returns true if we are past deadline
     bool check_deadline();
