@@ -33,6 +33,7 @@ struct Game {
   u64 hash;
 
   void make_move(Move move);
+  void make_null_move();
 
  private:
 

@@ -7,7 +7,7 @@
 #include <chrono>
 #include <atomic>
 
-#define MAX_PLY 50
+#define MAX_PLY 80
 
 struct Searcher{
 
@@ -32,7 +32,7 @@ struct Searcher{
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);
 
-    i32 alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game);
+    i32 alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null);
 
     private:
 

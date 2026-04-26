@@ -112,6 +112,17 @@ void Game::make_move(Move move) {
   next_turn();
 }
 
+void Game::make_null_move() {
+    // Toggle active player
+  turn = Color(!turn);
+
+  if (ep_pos >= 0)
+    update_hash(sq_key_map[ep_pos][EP_ZOB_INDEX]);
+  ep_pos = -1;
+
+  update_hash(acting_player_key);
+} 
+
 void Game::next_turn() {
   // Toggle active player
   turn = Color(!turn);

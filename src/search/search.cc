@@ -35,7 +35,9 @@ Searcher::~Searcher() {
     delete[] trans_table.table;
 }
 
-i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
+i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
+
+    this->node_count++;
 
     if (stop_search) return 0;
 
@@ -54,11 +56,10 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
         return tt_val;
     }
 
-    // Track transposition table type
-    TTType tt_type = UPPER;
-
     if (depth <= 0) return quiescence(alpha, beta, ply, game);
 
+    // Track transposition table type
+    TTType tt_type = UPPER;
     i32 best_val = MIN_VALUE;
     Move best_move = Move::null();
 
@@ -73,6 +74,23 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
         }
     }
 
+    if (gen_result.check != NO_CHECK)
+        depth++;
+    
+    // Null move. TODO: add big piece count check
+    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 4)) {
+        Game null_game = game;
+        null_game.make_null_move();
+        i32 score = -alpha_beta(-beta, -alpha, depth-1, ply+1, null_game, false);
+
+        if (this->stop_search)
+            return 0;
+
+        if (score >= beta && abs(score) < MATE_VALUE) {
+			return beta;
+		}
+    }
+
     Move pv_move = this->trans_table.get_pv_move(game.hash);
     mvv_lva_reordering(moves, pv_move, gen_result.count, game);
 
@@ -81,7 +99,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game) {
         Game branch_game = game;
         branch_game.make_move(move);
 
-        i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game);
+        i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game, do_null);
 
         if (stop_search)
             return 0;
@@ -125,7 +143,7 @@ Move Searcher::get_best_move(Game& game) {
 
     while (std::chrono::steady_clock::now() < deadline) {
 
-        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game);
+        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
 
         iter_depth++;
     }
@@ -135,11 +153,17 @@ Move Searcher::get_best_move(Game& game) {
     std::cout << "Search completed. Depth reached: " << (iter_depth - 1) << "\n";
     std::cout << "Nodes searched: " << this->node_count << "\n";
 
+    std::cout << "TT valid ratio: " << this->trans_table.valid_ratio() << "\n";
+
+    this->node_count = 0;
+
     return this->trans_table.get_pv_move(game.hash);
 }
 
 
 i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
+
+    this->node_count++;
 
     if (game.is_draw()) {
         return 0;
@@ -258,7 +282,7 @@ void thread_search(Searcher* searcher, Game game) {
 
     while (std::chrono::steady_clock::now() < searcher->deadline) {
 
-        searcher->alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game);
+        searcher->alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
 
         iter_depth++;
     }
@@ -284,7 +308,7 @@ Move Searcher::get_best_move_parallel(Game& game) {
 
     while (std::chrono::steady_clock::now() < this->deadline) {
 
-        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game);
+        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
 
         iter_depth++;
     }
@@ -292,6 +316,10 @@ Move Searcher::get_best_move_parallel(Game& game) {
     for (auto& t : threads) {
         t.join();
     }
+
+    this->trans_table.age++;
+
+    //std::cout << "Valid ratio: " << this->trans_table.valid_ratio() << "\n";
 
     return this->trans_table.get_pv_move(game.hash);
 }

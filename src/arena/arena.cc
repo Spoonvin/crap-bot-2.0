@@ -15,17 +15,6 @@ Arena::Arena(Game* game, Model* white, Model* black) {
 ArenaResult Arena::play(){
     while (true) {
 
-        Move move;
-
-        if (game->turn == WHITE) {
-            move = white_player->select_best(*game);
-        } else {
-            move = black_player->select_best(*game);
-        }
-
-        // Make move
-        game->make_move(move);
-
         MoveList moves;
         GenResult gen_result = gen_legal(*game, moves);
 
@@ -40,6 +29,17 @@ ArenaResult Arena::play(){
         if (gen_result.count <= 0) {
             return DRAW;
         }
+
+        Move move;
+
+        if (game->turn == WHITE) {
+            move = white_player->select_best(*game);
+        } else {
+            move = black_player->select_best(*game);
+        }
+
+        // Make move
+        game->make_move(move);
 
         if (gui_ctx.is_init()) {
             gui_ctx.render_game(*game, move.to());

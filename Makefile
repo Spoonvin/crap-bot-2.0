@@ -2,7 +2,7 @@
 CXX = g++
 
 # Flags
-CXXFLAGS = -O3 -std=c++17 -Iinclude $(shell pkg-config --cflags sdl3 sdl3-image)
+CXXFLAGS = -Ofast -march=native -mtune=native -flto -std=c++17 -Iinclude $(shell pkg-config --cflags sdl3 sdl3-image)
 
 # Linker flags
 LDFLAGS = $(shell pkg-config --libs sdl3 sdl3-image)
