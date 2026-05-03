@@ -4,7 +4,7 @@
 #include "chess/move/move.h"
 #include "search/evaluation.h"
 
-#define TT_SIZE 33554432
+#define TT_SIZE 16777216
 #define UNKNOWN_TT_VALUE (MIN_VALUE-1)
 
 enum TTType : u8 {
@@ -46,6 +46,7 @@ struct TransTable {
     TTEntry* table;
     u16 age;
 
+    TransTable();
     ~TransTable();
 
     void put(TTEntry entry, u64 hash);

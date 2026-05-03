@@ -1,5 +1,6 @@
 #include "arena/benchmark.h"
 #include "arena/arena.h"
+#include "gui/gui.h"
 #include <iostream>
 
 Benchmark::Benchmark(Model* m1, Model* m2) {
@@ -8,21 +9,20 @@ Benchmark::Benchmark(Model* m1, Model* m2) {
 }
 
 BenchmarkStats Benchmark::run_benchmark(Game& game, u32 iters) {
+
     stats.m1_score = 0;
     stats.m2_score = 0;
     stats.draws = 0;
 
     bool m1_white = true;
 
-
     for (u32 i = 0; i < iters; i++) {
-
-        Game b_game = game;
+        Game iter_game = game;
 
         Model* white_player = (m1_white) ? m1 : m2;
         Model* black_player = (m1_white) ? m2 : m1;
 
-        Arena arena(&b_game, white_player, black_player);
+        Arena arena(iter_game, white_player, black_player);
         ArenaResult result = arena.play();
 
         switch (result) {

@@ -3,47 +3,68 @@
 #include "gui/gui.h"
 #include "chess/move/movegen.h"
 #include "search/zobrist_hash.h"
+#include "model/bot.h"
 
 #include <iostream>
 
-Arena::Arena(Game* game, Model* white, Model* black) {
+Arena::Arena(Game game, Model* white, Model* black) {
     this->game = game;
     white_player = white;
     black_player = black;
 }
 
 ArenaResult Arena::play(){
+
+    gui_ctx.init(600);
+
+    if (gui_ctx.is_init()) {
+        gui_ctx.render_game(this->game, -1);
+        gui_ctx.present();
+    }
+
     while (true) {
 
         MoveList moves;
-        GenResult gen_result = gen_legal(*game, moves);
+        GenResult gen_result = gen_legal(game, moves);
 
         if (gen_result.count <= 0 && gen_result.check != NO_CHECK) {
-            if (game->turn == WHITE) {
+            if (game.turn == WHITE) {
+                gui_ctx.quit();
                 return BLACK_WIN;
             } else {
+                gui_ctx.quit();
                 return WHITE_WIN;
             }
         }
 
-        if (gen_result.count <= 0) {
+        if (gen_result.count <= 0 || game.is_draw()) {
+            gui_ctx.quit();
             return DRAW;
         }
 
         Move move;
 
-        if (game->turn == WHITE) {
-            move = white_player->select_best(*game);
+        if (game.turn == WHITE) {
+            move = white_player->select_best(game);
         } else {
-            move = black_player->select_best(*game);
+            move = black_player->select_best(game);
         }
 
+        if (move.is_null()) {
+            char fen[MAX_FEN] = {};
+            game.store_fen(fen);
+            std::cout << fen << "\n";
+        }
+
+        assert(!move.is_null());
+
         // Make move
-        game->make_move(move);
+        game.make_move(move);
 
         if (gui_ctx.is_init()) {
-            gui_ctx.render_game(*game, move.to());
+            gui_ctx.render_game(game, move.to());
             gui_ctx.present();
         }
     }
+
 }

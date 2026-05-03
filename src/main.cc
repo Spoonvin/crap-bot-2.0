@@ -5,13 +5,15 @@
 #include "gui/gui.h"
 #include "model/human.h"
 #include "model/bot.h"
+#include "model/bot_old.h"
 #include "search/evaluation.h"
 #include "search/search.h"
 #include "arena/arena.h"
 #include "search/zobrist_hash.h"
 #include "arena/benchmark.h"
+#include "search/opening_book.h"
 
-typedef void (*CommandFunction)(char** argv);
+typedef void (*CommandFunction)(i32 argc, char** argv);
 
 struct Command {
   const char* name;
@@ -19,18 +21,11 @@ struct Command {
   CommandFunction function;
 };
 
-void play(char** argv) {
+void play(i32 argc, char** argv) {
 
   Game game;
-  game = Game::initial();
-
-  gui_ctx.init(600);
-
-  if (gui_ctx.is_init()) {
-    gui_ctx.render_game(game, -1);
-    gui_ctx.present();
-  }
-
+  //game = Game::initial();
+  game = Game::from_fen("2r1kb1r/pp1Q1ppp/3p4/3N4/3BP1n1/8/PPP3PP/R3K2R b KQk - 8 15");
   Human* human = new Human();
 
   Bot* bot= new Bot();
@@ -38,31 +33,52 @@ void play(char** argv) {
   Model* white;
   Model* black;
 
-  if (strcmp(argv[2], "white") == 0) {
+  if (argc < 3) {
+    std::cout << "Setting player to white\n";
+    white = static_cast<Model*>(human);
+    black = static_cast<Model*>(bot);
+  } else if (strcmp(argv[2], "white") == 0) {
     white = static_cast<Model*>(human);
     black = static_cast<Model*>(bot);
   } else if (strcmp(argv[2], "black") == 0) {
     white = static_cast<Model*>(bot);
     black = static_cast<Model*>(human);
-  } else {
-    std::cout << "Setting player to white\n";
-    white = static_cast<Model*>(human);
-    black = static_cast<Model*>(bot);
-    return;
-  }
+  } 
 
-  Arena arena(&game, white, black);
+  Arena arena(game, white, black);
   arena.play();
 
-  delete bot;
-  delete human;
-
-  gui_ctx.quit();
+  delete white;
+  delete black;
 
   return;
 }
 
-void test_fen(char** argv) {
+void benchmark(i32 argc, char** argv) {
+
+  i32 iterations = std::stoi(argv[2]);
+
+  Game game;
+  game = Game::initial();
+
+  BotOld* bot_1= new BotOld();
+  BotOld* bot_2 = new BotOld();
+
+  Benchmark bench(bot_1, bot_2);
+
+  BenchmarkStats stats = bench.run_benchmark(game, iterations);
+
+  std::cout << "----- Benchmark Final Result -----\n";
+  std::cout << "Bot wins: " << stats.m1_score << "\n";
+  std::cout << "Old bot wins: " << stats.m2_score << "\n";
+  std::cout << "Draws: " << stats.draws << "\n";
+  
+  delete bot_1;
+  delete bot_2;
+
+}
+
+void test_fen(i32 argc, char** argv) {
 
   const char* fen = argv[2];
   u32 time_limit = (u32)std::stoi(argv[3]);
@@ -85,7 +101,8 @@ void test_fen(char** argv) {
 
 const Command commands[] = {
   {"play", "play <color> : play vs the bot.", play},
-  {"test_fen", "test_fen <FEN> <search-time> : print the best move from position.", test_fen}
+  {"test_fen", "test_fen <FEN> <search-time> : print the best move from position.", test_fen},
+  {"benchmark", "benchmark <iterations> : benchmark bot against old bot.", benchmark}
 };
 
 const int numCommands = sizeof(commands) / sizeof(Command);
@@ -93,11 +110,7 @@ const int numCommands = sizeof(commands) / sizeof(Command);
 i32 main(i32 argc, char** argv) {
 
   if (argc < 2) {
-    std::cout << "Usage: " << argv[0] << " [command] [options]\n";
-    std::cout << "Available commands:\n";
-    for (int i = 0; i < numCommands; ++i) {
-      std::cout << "  " << commands[i].name << ": " << commands[i].usage << "\n";
-    }
+    std::cout << "Specify command\n";
     return 1;
   } 
 
@@ -108,7 +121,7 @@ i32 main(i32 argc, char** argv) {
 
   for (int i = 0; i < numCommands; ++i) {
     if (strcmp(command_name, commands[i].name) == 0) {
-      commands[i].function(argv);
+      commands[i].function(argc, argv);
       return 0;
     }
   }

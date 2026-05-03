@@ -40,6 +40,10 @@ TTType TTEntry::get_type() const {
     return (TTType)((this->data >> 56));
 }
 
+TransTable::TransTable() {
+    init();
+}
+
 TransTable::~TransTable() {
     delete[] table;
 }

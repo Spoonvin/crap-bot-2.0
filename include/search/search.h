@@ -1,8 +1,10 @@
 #pragma once
+
 #include "chess/move/move.h"
 #include "chess/game.h"
 #include "chess/move/movegen.h"
 #include "search/trans_table.h"
+#include "search/opening_book.h"
 
 #include <chrono>
 #include <atomic>
@@ -13,12 +15,15 @@ struct Searcher{
 
     u8 base_depth;
 
+    Move root_move;
+
     u32 search_time;
     std::chrono::steady_clock::time_point deadline;
 
     bool stop_search;
 
     TransTable trans_table;
+    OpeningBook book;
 
     i32 node_count;
 
@@ -30,6 +35,8 @@ struct Searcher{
     ~Searcher();
 
     Move get_best_move(Game& game);
+    Move get_best_move_old(Game& game);
+
     Move get_best_move_parallel(Game& game);
 
     i32 alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null);

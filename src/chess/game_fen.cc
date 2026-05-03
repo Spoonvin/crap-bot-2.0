@@ -120,6 +120,14 @@ void Game::_from_fen(const char* fen) {
   // Consume space
   c = fen[i++];
 
+  // If no move count specified, intitialize and return
+  if (c == '\0') {
+    this->hm_clock = 0;
+    this->fm_counter = 0;
+    board.store_bitboards(players[WHITE].bb, players[BLACK].bb);
+    return;
+  }
+
   assert(c == ' ');
 
   // Halfmove clock

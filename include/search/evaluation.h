@@ -12,7 +12,7 @@
 
 #define MATE_VALUE 999999
 
-#define MAX_VALUE (MATE_VALUE + 1)
+#define MAX_VALUE (MATE_VALUE + 100)
 #define MIN_VALUE -(MAX_VALUE)
 
 

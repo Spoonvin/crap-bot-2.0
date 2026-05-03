@@ -11,20 +11,20 @@
 #include <iostream>
 #include <thread>
 
+#define BOOK_PATH "/home/spoonvin/projects/chess-parallel/assets/Book.txt"
 
 struct MoveMvvLvaScore{
     Move move;
     i32 score;
 };
 
-Searcher::Searcher(u8 depth) {
+Searcher::Searcher(u8 depth) : book(BOOK_PATH) {
+
     base_depth = depth;
     stop_search = false;
-
-    trans_table.init();
 }
 
-Searcher::Searcher(u32 search_time) {
+Searcher::Searcher(u32 search_time) : book(BOOK_PATH) {
     this->search_time = search_time;
     stop_search = false;
 
@@ -41,8 +41,8 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
 
     if (stop_search) return 0;
 
-    // Check deadline every 4th ply (for performance)
-    if ((ply & 0b111) == 0b101) {
+    // Check deadline only for some plys (for performance)
+    if ((ply & 0b111) == 0b100) {
         if (check_deadline()) return 0;
     }
 
@@ -53,6 +53,8 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
     // Transposition table lookup
     i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta);
     if (tt_val != UNKNOWN_TT_VALUE) {
+        if (ply == 0)
+            this->root_move = trans_table.get_pv_move(game.hash);
         return tt_val;
     }
 
@@ -108,6 +110,9 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
             best_val = branch_val;
             best_move = move;
 
+            if (ply == 0)
+                this->root_move = move;
+
             if (branch_val > alpha) {
                 tt_type = EXACT;
                 alpha = branch_val;
@@ -133,8 +138,13 @@ bool Searcher::check_deadline() {
     return true;
 }
 
-Move Searcher::get_best_move(Game& game) {
+Move Searcher::get_best_move_old(Game& game) {
+
+    Move book_move = this->book.lookup_position(game);
+    if (!book_move.is_null())
+        return book_move;
     
+    this->root_move = Move::null();
     stop_search = false;
     deadline = std::chrono::steady_clock::now()
          + std::chrono::milliseconds(search_time);
@@ -150,14 +160,71 @@ Move Searcher::get_best_move(Game& game) {
 
     this->trans_table.age++;
 
-    std::cout << "Search completed. Depth reached: " << (iter_depth - 1) << "\n";
-    std::cout << "Nodes searched: " << this->node_count << "\n";
+    this->node_count = 0;
 
-    std::cout << "TT valid ratio: " << this->trans_table.valid_ratio() << "\n";
+    Move final_move = this->root_move;
+    assert(!final_move.is_null());
+
+    return final_move;
+}
+
+Move Searcher::get_best_move(Game& game) {
+
+    Move book_move = this->book.lookup_position(game);
+    if (!book_move.is_null())
+        return book_move;
+    
+    this->root_move = Move::null();
+    stop_search = false;
+    deadline = std::chrono::steady_clock::now()
+         + std::chrono::milliseconds(search_time);
+
+    u8 iter_depth = 1;
+    i32 prev_score = 0;
+
+    while (std::chrono::steady_clock::now() < deadline) {
+
+        i32 window = 25;
+        i32 alpha = MIN_VALUE;
+        i32 beta = MAX_VALUE;
+
+        if (iter_depth > 2) {
+            alpha = prev_score - window;
+            beta = prev_score + window;
+        }
+
+        i32 score = 0;
+
+        while (true) {
+            score = alpha_beta(alpha, beta, iter_depth, 0, game, true);
+
+            if (this->stop_search)
+                break;
+
+            if (score <= alpha) {
+                alpha = MIN_VALUE;
+            } else if (score >= beta) {
+                beta = MAX_VALUE;
+            } else {
+                break;
+            }
+            
+        }
+
+        prev_score = score;
+
+        iter_depth++;
+
+    }
+
+    this->trans_table.age++;
 
     this->node_count = 0;
 
-    return this->trans_table.get_pv_move(game.hash);
+    Move final_move = this->root_move;
+    assert(!final_move.is_null());
+
+    return final_move;
 }
 
 

@@ -10,11 +10,11 @@ enum ArenaResult{
 };
 
 struct Arena{
-    Game* game;
+    Game game;
     Model* white_player;
     Model* black_player;
 
-    Arena(Game* game, Model* white, Model* black);
+    Arena(Game game, Model* white, Model* black);
 
     ArenaResult play();
 };

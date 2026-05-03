@@ -2,7 +2,7 @@
 #include "search/search.h"
 
 #define DEPTH 4
-#define TIME_LIM 2000
+#define TIME_LIM 600
 
 
 Bot::Bot() : searcher((u32)TIME_LIM) {}

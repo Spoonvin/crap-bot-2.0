@@ -1,5 +1,7 @@
 #include "search/evaluation.h"
 #include "chess/game.h"
+#include "chess/board/mask_operations.h"
+
 #include <iostream>
 
 const i8 b_pawn_square_mod[64] = {
@@ -67,7 +69,7 @@ Pos invert_pos(Pos pos) {
     return new_pos;
 }
 
-i32 eval_game(Game& game) {
+i32 eval_game_old(Game& game) {
     Bitboard bitboard_white = game.players[WHITE].bb;
     Bitboard bitboard_black = game.players[BLACK].bb;
 
@@ -140,6 +142,87 @@ i32 eval_game(Game& game) {
             black_score += mod;
         }
     }
+
+    i32 result = (game.turn == WHITE) ? white_score - black_score : black_score - white_score;
+
+    return result;
+}
+
+i32 eval_game(Game& game) {
+    Bitboard bitboard_white = game.players[WHITE].bb;
+    Bitboard bitboard_black = game.players[BLACK].bb;
+
+
+    i32 white_score = 0;
+    i32 black_score = 0;
+
+    // White Pawns
+    while (bitboard_white[PAWN]) {
+        Pos pos = invert_pos(pop_pos(bitboard_white[PAWN]));
+        white_score += PAWN_VALUE + b_pawn_square_mod[pos];
+    }
+
+    // White Knights
+    while (bitboard_white[KNIGHT]) {
+        Pos pos = invert_pos(pop_pos(bitboard_white[KNIGHT]));
+        white_score += KNIGHT_VALUE + b_knight_square_mod[pos];
+    }
+
+    // White Bishops
+    while (bitboard_white[BISHOP]) {
+        Pos pos = invert_pos(pop_pos(bitboard_white[BISHOP]));
+        white_score += BISHOP_VALUE + b_bishop_square_mod[pos];
+    }
+
+    // White Rooks
+    while (bitboard_white[ROOK]) {
+        Pos pos = invert_pos(pop_pos(bitboard_white[ROOK]));
+        white_score += ROOK_VALUE + b_rook_square_mod[pos];
+    }
+
+    // White Queens
+    while (bitboard_white[QUEEN]) {
+        Pos pos = invert_pos(pop_pos(bitboard_white[QUEEN]));
+        white_score += QUEEN_VALUE + b_queen_square_mod[pos];
+    }
+
+    Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
+    white_score += b_king_square_mod[king_pos_w];
+
+    // Black -------------------------------
+
+    // Black Pawns
+    while (bitboard_black[PAWN]) {
+        Pos pos = pop_pos(bitboard_black[PAWN]);
+        black_score += PAWN_VALUE + b_pawn_square_mod[pos];
+    }
+
+    // Black Knights
+    while (bitboard_black[KNIGHT]) {
+        Pos pos = pop_pos(bitboard_black[KNIGHT]);
+        black_score += KNIGHT_VALUE + b_knight_square_mod[pos];
+    }
+
+    // Black Bishops
+    while (bitboard_black[BISHOP]) {
+        Pos pos = pop_pos(bitboard_black[BISHOP]);
+        black_score += BISHOP_VALUE + b_bishop_square_mod[pos];
+    }
+
+    // Black Rooks
+    while (bitboard_black[ROOK]) {
+        Pos pos = pop_pos(bitboard_black[ROOK]);
+        black_score += ROOK_VALUE + b_rook_square_mod[pos];
+    }
+
+    // Black Queens
+    while (bitboard_black[QUEEN]) {
+        Pos pos = pop_pos(bitboard_black[QUEEN]);
+        black_score += QUEEN_VALUE + b_queen_square_mod[pos];
+    }
+
+    Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);
+    black_score += b_king_square_mod[king_pos_b];
 
     i32 result = (game.turn == WHITE) ? white_score - black_score : black_score - white_score;
 
