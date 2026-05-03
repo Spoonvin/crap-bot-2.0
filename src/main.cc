@@ -24,8 +24,7 @@ struct Command {
 void play(i32 argc, char** argv) {
 
   Game game;
-  //game = Game::initial();
-  game = Game::from_fen("2r1kb1r/pp1Q1ppp/3p4/3N4/3BP1n1/8/PPP3PP/R3K2R b KQk - 8 15");
+  game = Game::initial();
   Human* human = new Human();
 
   Bot* bot= new Bot();
@@ -43,7 +42,7 @@ void play(i32 argc, char** argv) {
   } else if (strcmp(argv[2], "black") == 0) {
     white = static_cast<Model*>(bot);
     black = static_cast<Model*>(human);
-  } 
+  }
 
   Arena arena(game, white, black);
   arena.play();
@@ -61,10 +60,10 @@ void benchmark(i32 argc, char** argv) {
   Game game;
   game = Game::initial();
 
-  BotOld* bot_1= new BotOld();
-  BotOld* bot_2 = new BotOld();
+  Bot* bot_new= new Bot();
+  BotOld* bot_old = new BotOld();
 
-  Benchmark bench(bot_1, bot_2);
+  Benchmark bench(bot_new, bot_old);
 
   BenchmarkStats stats = bench.run_benchmark(game, iterations);
 
@@ -73,8 +72,8 @@ void benchmark(i32 argc, char** argv) {
   std::cout << "Old bot wins: " << stats.m2_score << "\n";
   std::cout << "Draws: " << stats.draws << "\n";
   
-  delete bot_1;
-  delete bot_2;
+  delete bot_new;
+  delete bot_old;
 
 }
 
