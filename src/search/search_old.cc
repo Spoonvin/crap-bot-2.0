@@ -1,4 +1,4 @@
-#include "search/search.h"
+#include "search/search_old.h"
 #include "chess/game.h"
 #include "search/evaluation.h"
 #include "chess/move/movegen.h"
@@ -18,24 +18,24 @@ struct MoveMvvLvaScore{
     i32 score;
 };
 
-Searcher::Searcher(u8 depth) : book(BOOK_PATH) {
+SearcherOld::SearcherOld(u8 depth) : book(BOOK_PATH) {
 
     base_depth = depth;
     stop_search = false;
 }
 
-Searcher::Searcher(u32 search_time) : book(BOOK_PATH) {
+SearcherOld::SearcherOld(u32 search_time) : book(BOOK_PATH) {
     this->search_time = search_time;
     stop_search = false;
 
     trans_table.init();
 }
 
-Searcher::~Searcher() {
+SearcherOld::~SearcherOld() {
     delete[] trans_table.table;
 }
 
-i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
+i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
 
     this->node_count++;
 
@@ -130,7 +130,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
     return alpha;
 }
 
-bool Searcher::check_deadline() {
+bool SearcherOld::check_deadline() {
 
     if (std::chrono::steady_clock::now() < deadline) return false;
 
@@ -138,7 +138,7 @@ bool Searcher::check_deadline() {
     return true;
 }
 
-Move Searcher::get_best_move(Game& game) {
+Move SearcherOld::get_best_move(Game& game) {
 
     Move book_move = this->book.lookup_position(game);
     if (!book_move.is_null())
@@ -198,7 +198,7 @@ Move Searcher::get_best_move(Game& game) {
 }
 
 
-i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
+i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
     this->node_count++;
 
@@ -206,7 +206,7 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return 0;
     }
 
-    i32 static_eval = eval_game(game);
+    i32 static_eval = eval_game_old(game);
     i32 best_val = static_eval;
 
     if (ply > MAX_PLY) return static_eval;
@@ -251,7 +251,7 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
     return best_val;
 }
 
-void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game) {
+void SearcherOld::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game) {
     MoveMvvLvaScore move_scores[length];
 
     for (u8 i = 0; i < length; i++) {
@@ -278,7 +278,7 @@ void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game
     }
 }
 
-i32 Searcher::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
+i32 SearcherOld::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
 
     TTEntry entry = trans_table.get(hash);
 
@@ -308,12 +308,12 @@ i32 Searcher::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
     return UNKNOWN_TT_VALUE;
 }
 
-void Searcher::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type) {
+void SearcherOld::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type) {
     TTEntry entry = TTEntry(hash, move, depth, score, type);
     trans_table.put(entry, hash);
 }
 
-void thread_search(Searcher* searcher, Game game) {
+void thread_search(SearcherOld* searcher, Game game) {
 
     u8 iter_depth = 1;
 
@@ -329,7 +329,7 @@ void thread_search(Searcher* searcher, Game game) {
     return;
 }
 
-Move Searcher::get_best_move_parallel(Game& game) {
+Move SearcherOld::get_best_move_parallel(Game& game) {
 
     stop_search = false;
     deadline = std::chrono::steady_clock::now()

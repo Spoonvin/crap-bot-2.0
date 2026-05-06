@@ -17,7 +17,10 @@
 
 
 i32 eval_game(Game& game);
+i32 eval_game_old(Game& game);
 
 i32 square_value(Square square);
 
 i32 mvv_lva_score(Move move, Game& game);
+
+i32 eval_pawn_structure(Mask acting_pawns, Mask opponent_pawns, Color acting_color);

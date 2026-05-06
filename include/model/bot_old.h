@@ -1,11 +1,11 @@
 #pragma once
 
 #include "model.h"
-#include "search/search.h"
+#include "search/search_old.h"
 
 struct BotOld : Model {
 
-  Searcher searcher;
+  SearcherOld searcher;
 
   BotOld();
   BotOld(u32 time_lim);

@@ -66,7 +66,6 @@ OpeningBook::OpeningBook(const std::string& path) {
 }
 
 // Looks up opening moves and returns a random one
-
 Move OpeningBook::lookup_position(Game& game) {
     u64 game_hash = game.hash;
 

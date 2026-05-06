@@ -11,7 +11,7 @@
 
 #define MAX_PLY 80
 
-struct Searcher{
+struct SearcherOld{
 
     u8 base_depth;
 
@@ -29,10 +29,10 @@ struct Searcher{
 
     public:
 
-    Searcher(u8 depth);
-    Searcher(u32 search_time);
+    SearcherOld(u8 depth);
+    SearcherOld(u32 search_time);
 
-    ~Searcher();
+    ~SearcherOld();
 
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);

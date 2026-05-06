@@ -128,4 +128,3 @@ i32 main(i32 argc, char** argv) {
   std::cout << "Unknown command: " << command_name << "\n";
   return 1;
 }
-
