@@ -102,6 +102,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
         branch_game.make_move(move);
 
         i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game, do_null);
+        branch_game.untrack_history(branch_game.hash);
 
         if (stop_search)
             return 0;
@@ -189,6 +190,7 @@ Move Searcher::get_best_move(Game& game) {
 
     this->trans_table.age++;
 
+    std::cout << "Nodes searched: " << node_count << "\n";
     this->node_count = 0;
 
     Move final_move = this->root_move;
@@ -236,6 +238,7 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         branch_game.make_move(move);
 
         i32 branch_val = -quiescence(-beta, -alpha, ply+1, branch_game);
+        branch_game.untrack_history(branch_game.hash);
 
         if (branch_val >= beta) {
             return branch_val;

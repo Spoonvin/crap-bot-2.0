@@ -5,6 +5,7 @@
 #include "chess/move/movegen.h"
 #include "search/trans_table.h"
 #include "search/opening_book.h"
+#include "search/history.h"
 
 #include <chrono>
 #include <atomic>

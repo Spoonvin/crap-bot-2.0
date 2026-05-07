@@ -10,6 +10,7 @@
 #include "chess/player.h"
 #include "common/types.h"
 #include "move/move.h"
+#include "search/history.h"
 
 #define MAX_FEN 128
 
@@ -31,6 +32,7 @@ struct Game {
   u32 fm_counter;
 
   u64 hash;
+  History* history;
 
   void make_move(Move move);
   void make_null_move();
@@ -76,6 +78,7 @@ struct Game {
 
   void update_hash(Square sq, Pos pos);
   void update_hash(u64 key);
+  void untrack_history(u64 hash);
 
   // In game_fen.cc
 

@@ -158,6 +158,8 @@ void Game::_from_fen(const char* fen) {
 
   // Store bitboards
   board.store_bitboards(players[WHITE].bb, players[BLACK].bb);
+
+  history = new History();
 }
 
 void Game::store_fen(char buffer[MAX_FEN]) {

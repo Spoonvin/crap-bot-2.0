@@ -24,4 +24,6 @@ void Game::_initial() {
 
   hm_clock = 0;
   fm_counter = 1;
+
+  history = new History();
 }

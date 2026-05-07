@@ -49,6 +49,7 @@ void play(i32 argc, char** argv) {
 
   delete white;
   delete black;
+  delete game.history;
 
   return;
 }
@@ -74,6 +75,7 @@ void benchmark(i32 argc, char** argv) {
   
   delete bot_new;
   delete bot_old;
+  delete game.history;
 
 }
 

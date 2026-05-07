@@ -102,6 +102,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         branch_game.make_move(move);
 
         i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game, do_null);
+        branch_game.untrack_history(branch_game.hash);
 
         if (stop_search)
             return 0;
@@ -236,6 +237,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         branch_game.make_move(move);
 
         i32 branch_val = -quiescence(-beta, -alpha, ply+1, branch_game);
+        branch_game.untrack_history(branch_game.hash);
 
         if (branch_val >= beta) {
             return branch_val;

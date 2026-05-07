@@ -128,6 +128,7 @@ void Game::next_turn() {
   turn = Color(!turn);
 
   update_hash(acting_player_key);
+  history->track(this->hash);
 
   // Increment fullmove counter
   // Should be one for the first round
@@ -318,7 +319,7 @@ bool Game::is_draw() { return is_insuff() || is_50mr() || is_3fr(); }
 
 bool Game::is_3fr() {
   // Check if current position has been repeated 3 times
-  return false;
+  return this->history->is_3f_repitition(this->hash);
 }
 
 bool Game::is_insuff() {
@@ -462,4 +463,8 @@ void Game::update_hash(Square sq, Pos pos) {
 
 void Game::update_hash(u64 key) {
   this->hash ^= key;
+}
+
+void Game::untrack_history(u64 hash) {
+  this->history->untrack(hash);
 }

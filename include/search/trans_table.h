@@ -4,7 +4,9 @@
 #include "chess/move/move.h"
 #include "search/evaluation.h"
 
-#define TT_SIZE 16777216
+// Needs to be power of 2
+#define TT_SIZE 33554432
+
 #define UNKNOWN_TT_VALUE (MIN_VALUE-1)
 
 enum TTType : u8 {
