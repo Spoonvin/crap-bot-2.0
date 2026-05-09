@@ -4,6 +4,55 @@
 #include "chess/move/piece/king.h"
 #include "search/zobrist_hash.h"
 
+void Game::unmake_move(Move move) {
+  last_turn();
+
+  Player& act = players[turn];
+  Player& wait = players[!turn];
+
+  StateStackEntry entry = this->state_stack.pop();
+  this->ep_pos = entry.ep_pos;
+  this->hm_clock = entry.hm_clock;
+  players[0].cstl_flags = entry.castling_flags[0];
+  players[1].cstl_flags = entry.castling_flags[1];
+
+  Pos from = move.from();
+  Pos to = move.to();
+  MoveType move_type = move.type();
+
+  // Moved piece
+  Piece piece = stp(board[to]);
+
+  // Make move in reverse order
+  switch (move_type) {
+    case NORMAL: {
+      make_normal(act, wait, piece, to, from);
+      break;
+    }
+    case PROMOTION: {
+      unmake_promo(act, from, to, piece);
+      break;
+    }
+    case EN_PASSANT: {
+      unmake_ep(act, wait, from, to);
+      break;
+    }
+    case CASTLING: {
+      unmake_cstl(act, from ,to);
+      break;
+    }
+  }
+
+  // Put back captured piece
+  board[to] = entry.cap_square;
+  if (entry.cap_square != EMPTY_SQUARE) {
+    Piece p = stp(entry.cap_square);
+    wait.bb[p] ^= pos_mask(to);
+  }
+
+  this->hash = entry.hash;
+}
+
 void Game::make_move(Move move) {
   Player& act = players[turn];
   Player& wait = players[!turn];
@@ -15,6 +64,21 @@ void Game::make_move(Move move) {
 
   Pos from = move.from();
   Pos to = move.to();
+
+  bool is_capture = !(board[to] & EMPTY_SQUARE);
+
+  // Store state entry, 
+  StateStackEntry entry;
+  entry.castling_flags[0] = players[0].cstl_flags;
+  entry.castling_flags[1] = players[1].cstl_flags;
+  entry.hm_clock = this->hm_clock;
+  entry.ep_pos = this->ep_pos;
+  entry.hash = this->hash;
+  entry.cap_square = board[to];
+  entry.irreversible = false;
+
+  if (is_capture)
+    entry.irreversible = true;
 
   switch (move_type) {
     case NORMAL: {
@@ -32,6 +96,7 @@ void Game::make_move(Move move) {
     }
     case CASTLING: {
       make_cstl(act, from, to);
+      entry.irreversible = true;
       break;
     }
   }
@@ -47,6 +112,7 @@ void Game::make_move(Move move) {
   switch (piece) {
     case PAWN: {
       pawn_effect(from, to);
+      entry.irreversible = true;
       break;
     }
     case KING: {
@@ -109,11 +175,20 @@ void Game::make_move(Move move) {
     }
   }
 
+  this->state_stack.push(entry);
+
   next_turn();
 }
 
 void Game::make_null_move() {
-    // Toggle active player
+  
+  StateStackEntry entry;
+  entry.ep_pos = this->ep_pos;
+  entry.hash = this->hash;
+  entry.irreversible = true;
+
+  state_stack.push(entry);
+
   turn = Color(!turn);
 
   if (ep_pos >= 0)
@@ -121,6 +196,14 @@ void Game::make_null_move() {
   ep_pos = -1;
 
   update_hash(acting_player_key);
+} 
+
+void Game::unmake_null_move() {
+  turn = Color(!turn);
+
+  StateStackEntry entry = state_stack.pop();
+  ep_pos = entry.ep_pos;
+  hash = entry.hash;
 } 
 
 void Game::next_turn() {
@@ -138,6 +221,19 @@ void Game::next_turn() {
   hm_clock++;
 }
 
+void Game::last_turn() {
+  // Toggle active player
+  turn = Color(!turn);
+
+  // Increment fullmove counter
+  // Should be one for the first round
+  if (turn == WHITE) {
+    fm_counter--;
+  }
+
+  // hm_counter restored by state stack
+}
+
 // With known piece
 void Game::move_piece(Player& player, Piece piece, Pos from, Pos to) {
   if (!(board[to] & EMPTY_SQUARE)) {
@@ -145,6 +241,8 @@ void Game::move_piece(Player& player, Piece piece, Pos from, Pos to) {
     Square square = board[to];
     Player& captured_player = players[stc(square)];
     captured_player.bb[stp(square)] ^= pos_mask(to);
+
+    this->hm_clock = 0;
 
     update_hash(square, to);
   }
@@ -191,6 +289,8 @@ void Game::make_promo(
     Player& captured_player = players[stc(square)];
     captured_player.bb[stp(square)] ^= pos_mask(to);
 
+    this->hm_clock = 0;
+
     update_hash(square, to);
   }
 
@@ -209,6 +309,17 @@ void Game::make_promo(
   update_hash(org, from);
 }
 
+void Game::unmake_promo(  Player& act, Pos from, Pos to, Piece promo_piece) {
+
+  // No need to consider captures
+  // Handled in unmake_move
+  board[to] = EMPTY_SQUARE;
+  board[from] = pcts(PAWN, turn);
+
+  act.bb[PAWN] ^= pos_mask(from);
+  act.bb[promo_piece] ^= pos_mask(to);
+}
+
 void Game::make_ep(Player& act, Player& wait, Pos from, Pos to) {
   Pos dp_pos = (from & ~7) |  // Row of from-postion
                (ep_pos & 7);  // Column of en-passant-position
@@ -222,6 +333,18 @@ void Game::make_ep(Player& act, Player& wait, Pos from, Pos to) {
 
   // Move pawn
   move_piece(act, PAWN, from, to);
+}
+
+void Game::unmake_ep(Player& act, Player& wait, Pos from, Pos to) {
+  Pos dp_pos = (from & ~7) |  // Row of from-postion
+               (ep_pos & 7);  // Column of en-passant-position
+  
+  // Put back pawn
+  board[dp_pos] = pcts(PAWN, (Color)!turn);
+  wait.bb[PAWN] ^= pos_mask(dp_pos);
+
+  // Move pawn in reverse
+  move_piece(act, PAWN, to, from);
 }
 
 void Game::make_cstl(Player& act, Pos from, Pos to) {
@@ -255,6 +378,39 @@ void Game::make_cstl(Player& act, Pos from, Pos to) {
 
   // Move king
   move_piece(act, KING, from, to);
+}
+
+void Game::unmake_cstl(Player& act, Pos from, Pos to) {
+  // Extract column of target square
+  i8 to_col = to & 7;
+
+  Pos rook_from, rook_to;
+
+  switch (to_col) {
+    case 2: {
+      // Castling to left
+      rook_to = from - 1;
+      rook_from = from - 4;
+      break;
+    }
+
+    case 6: {
+      // Castling to right
+      rook_to = from + 1;
+      rook_from = from + 3;
+      break;
+    }
+    default: {
+      // Shouldn't happen
+      abort();
+    }
+  }
+
+  // Move rook
+  move_piece(act, ROOK, rook_to, rook_from);
+
+  // Move king
+  move_piece(act, KING, to, from);
 }
 
 // Special side-effects
@@ -318,7 +474,7 @@ bool Game::is_draw() { return is_insuff() || is_50mr() || is_3fr(); }
 
 bool Game::is_3fr() {
   // Check if current position has been repeated 3 times
-  return false;
+  return state_stack.is_3fr(this->hash);
 }
 
 bool Game::is_insuff() {
@@ -462,4 +618,49 @@ void Game::update_hash(Square sq, Pos pos) {
 
 void Game::update_hash(u64 key) {
   this->hash ^= key;
+}
+
+StateStack::StateStack() {
+  for (u32 i = 0; i < MAX_STATE_STACK_SIZE; i++) {
+    this->entries[i] = {};
+  }
+
+  this->size = 0;
+}
+
+void StateStack::push(StateStackEntry entry) {
+  this->entries[this->size] = entry;
+  size++;
+}
+
+StateStackEntry StateStack::pop() {
+  assert(this->size > 0);
+  this->size -= 1;
+
+  return this->entries[this->size];
+}
+
+bool StateStack::is_3fr(u64 hash) {
+  i32 n_repetitions = 1;
+
+  for (i32 i = this->size-2; i >= 0; i -= 2) {
+    StateStackEntry entry = this->entries[i];
+
+    if (entry.hash == hash) {
+      n_repetitions++;
+
+      if (n_repetitions >= 3)
+        return true;
+    }
+
+    if (entry.irreversible)
+      break;
+  }
+
+  return false;
+}
+
+bool Game::player_has_non_pawn_piece() {
+  Bitboard b = players[turn].bb;
+  return b[KNIGHT] || b[BISHOP] || b[ROOK] || b[QUEEN];
 }

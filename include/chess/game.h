@@ -13,6 +13,32 @@
 
 #define MAX_FEN 128
 
+#define MAX_STATE_STACK_SIZE 4096
+
+struct StateStackEntry {
+  i8 castling_flags[2];
+  Pos ep_pos;
+  u8 hm_clock;
+  Square cap_square;
+  u64 hash;
+
+  // If state is irreversible
+  // No need to check repetitions before this state
+  bool irreversible;
+};
+
+struct StateStack {
+  StateStackEntry entries[MAX_STATE_STACK_SIZE];
+  i32 size;
+
+  StateStack();
+
+  void push(StateStackEntry entry);
+  StateStackEntry pop();
+
+  bool is_3fr(u64 hash);
+};
+
 struct Game {
   // Acting player color
   Color turn;
@@ -30,16 +56,23 @@ struct Game {
   u8 hm_clock;
   u32 fm_counter;
 
+  // Hash for position
   u64 hash;
 
+  // Stack with previus states
+  StateStack state_stack;
+
   void make_move(Move move);
+  void unmake_move(Move move);
   void make_null_move();
+  void unmake_null_move();
 
  private:
 
   // Helper functions
 
   void next_turn();
+  void last_turn();
   void move_piece(Player& player, Piece piece, Pos from, Pos to);
   
   // Move side-effects
@@ -51,8 +84,15 @@ struct Game {
     Pos from,
     Pos to,
     Piece promo_piece);
+  void unmake_promo(
+    Player& act,
+    Pos from,
+    Pos to,
+    Piece promo_piece);
   void make_ep(Player& act, Player& wait, Pos from, Pos to);
+  void unmake_ep(Player& act, Player& wait, Pos from, Pos to);
   void make_cstl(Player& act, Pos from, Pos to);
+  void unmake_cstl(Player& act, Pos from, Pos to);
 
   // Piece side-effects
 
@@ -76,6 +116,9 @@ struct Game {
 
   void update_hash(Square sq, Pos pos);
   void update_hash(u64 key);
+
+  bool player_has_non_pawn_piece();
+
 
   // In game_fen.cc
 

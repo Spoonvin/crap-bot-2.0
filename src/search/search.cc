@@ -79,11 +79,14 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
     if (gen_result.check != NO_CHECK)
         depth++;
     
-    // Null move. TODO: add big piece count check
-    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 4)) {
-        Game null_game = game;
-        null_game.make_null_move();
-        i32 score = -alpha_beta(-beta, -alpha, depth-1, ply+1, null_game, false);
+    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 3) &&
+        game.player_has_non_pawn_piece()) {
+
+        int R = 2 + depth / 4;
+
+        game.make_null_move();
+        i32 score = -alpha_beta(-beta, -beta+1, depth-1-R, ply+1, game, false);
+        game.unmake_null_move();
 
         if (this->stop_search)
             return 0;
@@ -98,10 +101,10 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
-        Game branch_game = game;
-        branch_game.make_move(move);
+        game.make_move(move);
 
-        i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game, do_null);
+        i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, game, do_null);
+        game.unmake_move(move);
 
         if (stop_search)
             return 0;
@@ -189,6 +192,7 @@ Move Searcher::get_best_move(Game& game) {
 
     this->trans_table.age++;
 
+    //std::cout << "Node searched: " << node_count << "\n";
     this->node_count = 0;
 
     Move final_move = this->root_move;
@@ -196,7 +200,6 @@ Move Searcher::get_best_move(Game& game) {
 
     return final_move;
 }
-
 
 i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
@@ -232,10 +235,10 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
-        Game branch_game = game;
-        branch_game.make_move(move);
+        game.make_move(move);
 
-        i32 branch_val = -quiescence(-beta, -alpha, ply+1, branch_game);
+        i32 branch_val = -quiescence(-beta, -alpha, ply+1, game);
+        game.unmake_move(move);
 
         if (branch_val >= beta) {
             return branch_val;

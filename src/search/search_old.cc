@@ -80,6 +80,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         depth++;
     
     // Null move. TODO: add big piece count check
+    /*
     if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 4)) {
         Game null_game = game;
         null_game.make_null_move();
@@ -91,17 +92,17 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         if (score >= beta && abs(score) < MATE_VALUE) {
 			return beta;
 		}
-    }
+    }*/
 
     Move pv_move = this->trans_table.get_pv_move(game.hash);
     mvv_lva_reordering(moves, pv_move, gen_result.count, game);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
-        Game branch_game = game;
-        branch_game.make_move(move);
+        game.make_move(move);
 
-        i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, branch_game, do_null);
+        i32 branch_val = -alpha_beta(-beta, -alpha, depth-1, ply+1, game, do_null);
+        game.unmake_move(move);
 
         if (stop_search)
             return 0;
@@ -206,7 +207,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return 0;
     }
 
-    i32 static_eval = eval_game_old(game);
+    i32 static_eval = eval_game(game);
     i32 best_val = static_eval;
 
     if (ply > MAX_PLY) return static_eval;
@@ -232,10 +233,10 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
-        Game branch_game = game;
-        branch_game.make_move(move);
+        game.make_move(move);
 
-        i32 branch_val = -quiescence(-beta, -alpha, ply+1, branch_game);
+        i32 branch_val = -quiescence(-beta, -alpha, ply+1, game);
+        game.unmake_move(move);
 
         if (branch_val >= beta) {
             return branch_val;
