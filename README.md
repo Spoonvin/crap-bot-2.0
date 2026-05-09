@@ -6,4 +6,4 @@ Dependencies:
 
 Run:
 - make all
-- ./app
+- ./app play
