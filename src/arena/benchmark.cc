@@ -1,6 +1,6 @@
 #include "arena/benchmark.h"
 #include "arena/arena.h"
-#include "gui/gui.h"
+
 #include <iostream>
 
 Benchmark::Benchmark(Model* m1, Model* m2) {

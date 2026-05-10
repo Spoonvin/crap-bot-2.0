@@ -192,7 +192,7 @@ Move Searcher::get_best_move(Game& game) {
 
     this->trans_table.age++;
 
-    //std::cout << "Node searched: " << node_count << "\n";
+    std::cout << "Node searched: " << node_count << "\n";
     this->node_count = 0;
 
     Move final_move = this->root_move;

@@ -2,7 +2,6 @@
 #include <cstring>
 #include <iostream>
 
-#include "gui/gui.h"
 #include "model/human.h"
 #include "model/bot.h"
 #include "model/bot_old.h"
@@ -12,6 +11,10 @@
 #include "search/zobrist_hash.h"
 #include "arena/benchmark.h"
 #include "search/opening_book.h"
+
+//#ifndef DUSE_GUI
+#define DUSE_GUI 1
+//#endif
 
 typedef void (*CommandFunction)(i32 argc, char** argv);
 

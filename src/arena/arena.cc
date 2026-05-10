@@ -1,11 +1,18 @@
 #include "arena/arena.h"
 #include "model/model.h"
-#include "gui/gui.h"
 #include "chess/move/movegen.h"
 #include "search/zobrist_hash.h"
 #include "model/bot.h"
 
 #include <iostream>
+
+#ifndef DUSE_GUI
+#define DUSE_GUI 1
+#endif
+
+#if DUSE_GUI
+#include "gui/gui.h"
+#endif
 
 Arena::Arena(Game game, Model* white, Model* black) {
     this->game = game;
@@ -15,12 +22,16 @@ Arena::Arena(Game game, Model* white, Model* black) {
 
 ArenaResult Arena::play(){
 
+    #if DUSE_GUI
     gui_ctx.init(600);
 
     if (gui_ctx.is_init()) {
         gui_ctx.render_game(this->game, -1);
         gui_ctx.present();
     }
+    #endif
+
+    ArenaResult result = DRAW;
 
     while (true) {
 
@@ -29,17 +40,17 @@ ArenaResult Arena::play(){
 
         if (gen_result.count <= 0 && gen_result.check != NO_CHECK) {
             if (game.turn == WHITE) {
-                gui_ctx.quit();
-                return BLACK_WIN;
+                result = BLACK_WIN;
+                break;
             } else {
-                gui_ctx.quit();
-                return WHITE_WIN;
+                result = WHITE_WIN;
+                break;
             }
         }
 
         if (gen_result.count <= 0 || game.is_draw()) {
-            gui_ctx.quit();
-            return DRAW;
+            result = DRAW;
+            break;
         }
 
         Move move;
@@ -61,10 +72,17 @@ ArenaResult Arena::play(){
         // Make move
         game.make_move(move);
 
+        #if DUSE_GUI
         if (gui_ctx.is_init()) {
             gui_ctx.render_game(game, move.to());
             gui_ctx.present();
         }
+        #endif
     }
 
+    #if DUSE_GUI
+    gui_ctx.quit();
+    #endif
+
+    return result;
 }
