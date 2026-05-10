@@ -2,10 +2,16 @@
 #include "chess/game.h"
 #include "chess/board/mask_operations.h"
 
-#include <iostream>
+#define DOUBLE_PAWN_PENALTY 15
+#define ISOLATED_PAWN_PENALTY 15
 
-#define DOUBLE_PAWN_PENALTY 20
-#define ISOLATED_PAWN_PENALTY 25
+#define QUEEN_OPEN_FILE_BONUS 10
+#define QUEEN_SEMI_OPEN_FILE_BONUS 5
+#define ROOK_OPEN_FILE_BONUS 15
+#define ROOK_SEMI_OPEN_FILE_BONUS 8
+
+#define BISHOP_PAIR_BONUS 30
+
 
 Mask WHITE_PASSED_TABLE[64];
 Mask BLACK_PASSED_TABLE[64];
@@ -45,10 +51,10 @@ void init_passed() {
 
 const i8 b_pawn_square_mod[64] = {
     0,  0,  0,  0,  0,  0,  0,  0,
-    50, 100,60, 80, 70, 100,20,  0,
-    10, 10, 20, 30, 30, 20, 10,  0,
-    5,  5, 10, 25, 25, 10,  5,  0,
-    0,  0,  0, 20, 20,  0,  0,  0,
+    20, 20, 30, 30, 30, 30, 20, 10,
+    10, 10, 15, 15, 15, 15, 10, 10,
+    5,  5,  10, 10, 10, 10,  5,  0,
+    0,  0,  0,  20, 20,  0,  0,  0,
     5, -5,  0,  0,  0,  0, 10,  5,
     5,  0, 10,-20,-20, 10, 10,  0,
     0,  0,  0,  0,  0,  0,  0,  0};
@@ -139,6 +145,7 @@ i32 eval_game_old(Game& game) {
     }
 
     // White Bishops
+    u8 num_w_bishops = 0;
     while (bitboard_white[BISHOP]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[BISHOP]));
         white_score += BISHOP_VALUE + b_bishop_square_mod[pos];
@@ -203,15 +210,17 @@ i32 eval_game(Game& game) {
     Bitboard bitboard_white = game.players[WHITE].bb;
     Bitboard bitboard_black = game.players[BLACK].bb;
 
+    Mask all_pawns = bitboard_white[PAWN] | bitboard_black[PAWN];
+
     i32 white_score = 0;
     i32 black_score = 0;
 
-    // White Pawns
-    while (bitboard_white[PAWN]) {
-        Pos pos = invert_pos(pop_pos(bitboard_white[PAWN]));
-        white_score += PAWN_VALUE + b_pawn_square_mod[pos];
-    }
+    // Pawn structure
     white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
+    black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+
+
+    // ------------ White ------------
 
     // White Knights
     while (bitboard_white[KNIGHT]) {
@@ -220,34 +229,50 @@ i32 eval_game(Game& game) {
     }
 
     // White Bishops
+    u8 num_w_bishops = 0;
     while (bitboard_white[BISHOP]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[BISHOP]));
         white_score += BISHOP_VALUE + b_bishop_square_mod[pos];
+        num_w_bishops++;
+    }
+    if (num_w_bishops >= 2) {
+        white_score += BISHOP_PAIR_BONUS;
     }
 
     // White Rooks
     while (bitboard_white[ROOK]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[ROOK]));
         white_score += ROOK_VALUE + b_rook_square_mod[pos];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            white_score += ROOK_OPEN_FILE_BONUS;
+        } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
+            white_score += ROOK_SEMI_OPEN_FILE_BONUS;
+        }
     }
 
     // White Queens
     while (bitboard_white[QUEEN]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[QUEEN]));
         white_score += QUEEN_VALUE + b_queen_square_mod[pos];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            white_score += QUEEN_OPEN_FILE_BONUS;
+        } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
+            white_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    // White Pawns
+    while (bitboard_white[PAWN]) {
+        Pos pos = invert_pos(pop_pos(bitboard_white[PAWN]));
+        white_score += PAWN_VALUE + b_pawn_square_mod[pos];
     }
 
     Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
     white_score += b_king_square_mod[king_pos_w];
 
-    // Black -------------------------------
-
-    // Black Pawns
-    while (bitboard_black[PAWN]) {
-        Pos pos = pop_pos(bitboard_black[PAWN]);
-        black_score += PAWN_VALUE + b_pawn_square_mod[pos];
-    }
-    black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+    // ------------ Black -----------------------
 
     // Black Knights
     while (bitboard_black[KNIGHT]) {
@@ -256,21 +281,43 @@ i32 eval_game(Game& game) {
     }
 
     // Black Bishops
+    u8 num_b_bishops = 0;
     while (bitboard_black[BISHOP]) {
         Pos pos = pop_pos(bitboard_black[BISHOP]);
         black_score += BISHOP_VALUE + b_bishop_square_mod[pos];
+        num_b_bishops++;
     }
+    if (num_b_bishops >= 2)
+        black_score += BISHOP_PAIR_BONUS;
 
     // Black Rooks
     while (bitboard_black[ROOK]) {
         Pos pos = pop_pos(bitboard_black[ROOK]);
         black_score += ROOK_VALUE + b_rook_square_mod[pos];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            black_score += ROOK_OPEN_FILE_BONUS;
+        } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
+            black_score += ROOK_SEMI_OPEN_FILE_BONUS;
+        }
     }
 
     // Black Queens
     while (bitboard_black[QUEEN]) {
         Pos pos = pop_pos(bitboard_black[QUEEN]);
         black_score += QUEEN_VALUE + b_queen_square_mod[pos];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            black_score += QUEEN_OPEN_FILE_BONUS;
+        } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
+            black_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    // Black Pawns
+    while (bitboard_black[PAWN]) {
+        Pos pos = pop_pos(bitboard_black[PAWN]);
+        black_score += PAWN_VALUE + b_pawn_square_mod[pos];
     }
 
     Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);

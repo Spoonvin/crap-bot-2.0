@@ -79,12 +79,14 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
     if (gen_result.check != NO_CHECK)
         depth++;
     
-    // Null move. TODO: add big piece count check
-    /*
-    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 4)) {
-        Game null_game = game;
-        null_game.make_null_move();
-        i32 score = -alpha_beta(-beta, -alpha, depth-1, ply+1, null_game, false);
+    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 3) &&
+        game.player_has_non_pawn_piece()) {
+
+        int R = 2 + depth / 4;
+
+        game.make_null_move();
+        i32 score = -alpha_beta(-beta, -beta+1, depth-1-R, ply+1, game, false);
+        game.unmake_null_move();
 
         if (this->stop_search)
             return 0;
@@ -92,7 +94,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         if (score >= beta && abs(score) < MATE_VALUE) {
 			return beta;
 		}
-    }*/
+    }
 
     Move pv_move = this->trans_table.get_pv_move(game.hash);
     mvv_lva_reordering(moves, pv_move, gen_result.count, game);
@@ -207,7 +209,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return 0;
     }
 
-    i32 static_eval = eval_game(game);
+    i32 static_eval = eval_game_old(game);
     i32 best_val = static_eval;
 
     if (ply > MAX_PLY) return static_eval;
