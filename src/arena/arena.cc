@@ -6,11 +6,11 @@
 
 #include <iostream>
 
-#ifndef DUSE_GUI
-#define DUSE_GUI 1
+#ifndef USE_GUI
+#define USE_GUI 1
 #endif
 
-#if DUSE_GUI
+#if USE_GUI
 #include "gui/gui.h"
 #endif
 
@@ -22,7 +22,7 @@ Arena::Arena(Game game, Model* white, Model* black) {
 
 ArenaResult Arena::play(){
 
-    #if DUSE_GUI
+    #if USE_GUI
     gui_ctx.init(600);
 
     if (gui_ctx.is_init()) {
@@ -72,7 +72,7 @@ ArenaResult Arena::play(){
         // Make move
         game.make_move(move);
 
-        #if DUSE_GUI
+        #if USE_GUI
         if (gui_ctx.is_init()) {
             gui_ctx.render_game(game, move.to());
             gui_ctx.present();
@@ -80,7 +80,7 @@ ArenaResult Arena::play(){
         #endif
     }
 
-    #if DUSE_GUI
+    #if USE_GUI
     gui_ctx.quit();
     #endif
 

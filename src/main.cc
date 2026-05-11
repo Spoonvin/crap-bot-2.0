@@ -12,10 +12,6 @@
 #include "arena/benchmark.h"
 #include "search/opening_book.h"
 
-//#ifndef DUSE_GUI
-#define DUSE_GUI 1
-//#endif
-
 typedef void (*CommandFunction)(i32 argc, char** argv);
 
 struct Command {
