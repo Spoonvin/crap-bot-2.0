@@ -140,6 +140,20 @@ i32 eval_game_old(Game& game) {
     white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
     black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
 
+    /*
+    // Rook on seventh bonus
+    if (bitboard_white[ROOK] & row_mask(6)) {
+        if ((bitboard_black[PAWN] & row_mask(6)) || (bitboard_black[KING] & row_mask(7))) {
+            white_score += ROOK_ON_SEVENTH_BONUS;
+        }
+    }
+
+    if (bitboard_black[ROOK] & row_mask(1)) {
+        if ((bitboard_white[PAWN] & row_mask(1)) || (bitboard_white[KING] & row_mask(0))) {
+            black_score += ROOK_ON_SEVENTH_BONUS;
+        }
+    }*/
+
     // ------------ White ------------
 
     // White Knights
@@ -261,6 +275,7 @@ i32 eval_game(Game& game) {
     white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
     black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
 
+    /*
     // Rook on seventh bonus
     if (bitboard_white[ROOK] & row_mask(6)) {
         if ((bitboard_black[PAWN] & row_mask(6)) || (bitboard_black[KING] & row_mask(7))) {
@@ -272,7 +287,7 @@ i32 eval_game(Game& game) {
         if ((bitboard_white[PAWN] & row_mask(1)) || (bitboard_white[KING] & row_mask(0))) {
             black_score += ROOK_ON_SEVENTH_BONUS;
         }
-    }
+    }*/
 
     // ------------ White ------------
 

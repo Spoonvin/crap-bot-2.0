@@ -13,6 +13,8 @@
 
 #define BOOK_PATH "/home/spoonvin/projects/chess-parallel/assets/Book.txt"
 
+#define KILLER_BONUS 300
+
 struct MoveMvvLvaScore{
     Move move;
     i32 score;
@@ -97,7 +99,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
     }
 
     Move pv_move = this->trans_table.get_pv_move(game.hash);
-    mvv_lva_reordering(moves, pv_move, gen_result.count, game);
+    mvv_lva_reordering(moves, pv_move, gen_result.count, game, ply);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
@@ -124,6 +126,14 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
 
         if(branch_val >= beta) {
             record_trans_table(game.hash, depth, best_move, beta, LOWER);
+
+            // Homemode killer heuristic
+            // If move was searched late and caused cutoff ->
+            // store and give move order bonus later
+            if (i > (gen_result.count >> 2)) {
+                killers[ply] = move;
+            }
+
             return beta;
         }
     }
@@ -192,7 +202,7 @@ Move Searcher::get_best_move(Game& game) {
 
     this->trans_table.age++;
 
-    std::cout << "Node searched: " << node_count << "\n";
+    //std::cout << "Node searched: " << node_count << "\n";
     this->node_count = 0;
 
     Move final_move = this->root_move;
@@ -231,7 +241,7 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return -MATE_VALUE + ply;
     }
 
-    mvv_lva_reordering(moves, Move::null(), gen_result.count, game);
+    mvv_lva_reordering(moves, Move::null(), gen_result.count, game, ply);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
@@ -254,13 +264,16 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
     return best_val;
 }
 
-void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game) {
+void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game, u8 ply) {
     MoveMvvLvaScore move_scores[length];
 
     for (u8 i = 0; i < length; i++) {
         Move move = moves[i];
         i32 move_score = (move.data == pv_move.data) ? 
             MAX_VALUE : mvv_lva_score(move, game);
+        
+        if (killers[ply].data == move.data)
+            move_score += KILLER_BONUS;
 
         move_scores[i] = {move, move_score};
     }

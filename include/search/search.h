@@ -25,6 +25,8 @@ struct Searcher{
     TransTable trans_table;
     OpeningBook book;
 
+    Move killers[MAX_PLY];
+
     i32 node_count;
 
     public:
@@ -43,7 +45,7 @@ struct Searcher{
 
     i32 quiescence(i32 alpha, i32 beta, u8 ply, Game& game);
 
-    void mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game);
+    void mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game, u8 ply);
 
     // Returns true if we are past deadline
     bool check_deadline();
