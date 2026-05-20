@@ -9,6 +9,8 @@ struct BotOld : Model {
 
   BotOld();
   BotOld(u32 time_lim);
+
+  ~BotOld();
   
   Move select_best(Game& game) override;
 

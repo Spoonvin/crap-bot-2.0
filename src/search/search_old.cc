@@ -13,6 +13,8 @@
 
 #define BOOK_PATH "/home/spoonvin/projects/chess-parallel/assets/Book.txt"
 
+#define KILLER_BONUS 300
+
 struct MoveMvvLvaScore{
     Move move;
     i32 score;
@@ -28,11 +30,7 @@ SearcherOld::SearcherOld(u32 search_time) : book(BOOK_PATH) {
     this->search_time = search_time;
     stop_search = false;
 
-    trans_table.init();
-}
-
-SearcherOld::~SearcherOld() {
-    delete[] trans_table.table;
+    this->trans_table = new TransTable();
 }
 
 i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
@@ -54,7 +52,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
     i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta);
     if (tt_val != UNKNOWN_TT_VALUE) {
         if (ply == 0)
-            this->root_move = trans_table.get_pv_move(game.hash);
+            this->root_move = trans_table->get_pv_move(game.hash);
         return tt_val;
     }
 
@@ -96,8 +94,8 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
 		}
     }
 
-    Move pv_move = this->trans_table.get_pv_move(game.hash);
-    mvv_lva_reordering(moves, pv_move, gen_result.count, game);
+    Move pv_move = this->trans_table->get_pv_move(game.hash);
+    mvv_lva_reordering(moves, pv_move, gen_result.count, game, ply);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
@@ -124,6 +122,14 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
 
         if(branch_val >= beta) {
             record_trans_table(game.hash, depth, best_move, beta, LOWER);
+
+            // Homemode killer heuristic
+            // If move was searched late and caused cutoff ->
+            // store and give move order bonus later
+            if (i > (gen_result.count >> 2)) {
+                killers[ply] = move;
+            }
+
             return beta;
         }
     }
@@ -190,7 +196,7 @@ Move SearcherOld::get_best_move(Game& game) {
 
     }
 
-    this->trans_table.age++;
+    this->trans_table->age++;
 
     this->node_count = 0;
 
@@ -231,7 +237,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return -MATE_VALUE + ply;
     }
 
-    mvv_lva_reordering(moves, Move::null(), gen_result.count, game);
+    mvv_lva_reordering(moves, Move::null(), gen_result.count, game, ply);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
@@ -254,13 +260,16 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
     return best_val;
 }
 
-void SearcherOld::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game) {
+void SearcherOld::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game, u8 ply) {
     MoveMvvLvaScore move_scores[length];
 
     for (u8 i = 0; i < length; i++) {
         Move move = moves[i];
         i32 move_score = (move.data == pv_move.data) ? 
             MAX_VALUE : mvv_lva_score(move, game);
+
+        if (killers[ply].data == move.data)
+            move_score += KILLER_BONUS;
 
         move_scores[i] = {move, move_score};
     }
@@ -283,7 +292,7 @@ void SearcherOld::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, G
 
 i32 SearcherOld::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
 
-    TTEntry entry = trans_table.get(hash);
+    TTEntry entry = trans_table->get(hash);
 
     if (entry.is_valid()) {
 
@@ -313,7 +322,7 @@ i32 SearcherOld::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
 
 void SearcherOld::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type) {
     TTEntry entry = TTEntry(hash, move, depth, score, type);
-    trans_table.put(entry, hash);
+    trans_table->put(entry, hash);
 }
 
 void thread_search(SearcherOld* searcher, Game game) {
@@ -357,9 +366,9 @@ Move SearcherOld::get_best_move_parallel(Game& game) {
         t.join();
     }
 
-    this->trans_table.age++;
+    this->trans_table->age++;
 
     //std::cout << "Valid ratio: " << this->trans_table.valid_ratio() << "\n";
 
-    return this->trans_table.get_pv_move(game.hash);
+    return this->trans_table->get_pv_move(game.hash);
 }

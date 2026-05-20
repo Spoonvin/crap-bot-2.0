@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -9,7 +10,8 @@
 
 struct OpeningBook {
 private:
-    std::unordered_map<u64, std::vector<std::string>> posMoves;
+    std::shared_ptr<
+    std::unordered_map<u64, std::vector<std::string>>> posMoves;
     std::mt19937 rng;
 
     Move book_move_to_move(const std::string& bookMove, Game& game);

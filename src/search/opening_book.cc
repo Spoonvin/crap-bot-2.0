@@ -14,6 +14,9 @@ OpeningBook::OpeningBook(const std::string& path) {
     std::random_device rd;
     rng = std::mt19937(rd());
 
+    posMoves = std::make_shared<
+    std::unordered_map<u64, std::vector<std::string>>>();
+
     std::ifstream in(path);
     if (!in) {
         throw std::runtime_error("Failed to open book file");
@@ -61,7 +64,7 @@ OpeningBook::OpeningBook(const std::string& path) {
             moves.push_back(lines[i]);
         }
 
-        posMoves[fen_hash] = moves;
+        (*posMoves)[fen_hash] = moves;
     }
 }
 
@@ -69,8 +72,8 @@ OpeningBook::OpeningBook(const std::string& path) {
 Move OpeningBook::lookup_position(Game& game) {
     u64 game_hash = game.hash;
 
-    auto it = posMoves.find(game_hash);
-    if (it != posMoves.end()) {
+    auto it = posMoves->find(game_hash);
+    if (it != posMoves->end()) {
         const std::vector<std::string>& moves = it->second;
 
         std::uniform_int_distribution<int> dist(0, moves.size() - 1);

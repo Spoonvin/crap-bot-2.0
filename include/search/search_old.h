@@ -22,8 +22,10 @@ struct SearcherOld{
 
     bool stop_search;
 
-    TransTable trans_table;
+    TransTable* trans_table;
     OpeningBook book;
+
+    Move killers[MAX_PLY];
 
     i32 node_count;
 
@@ -31,8 +33,6 @@ struct SearcherOld{
 
     SearcherOld(u8 depth);
     SearcherOld(u32 search_time);
-
-    ~SearcherOld();
 
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);
@@ -43,7 +43,7 @@ struct SearcherOld{
 
     i32 quiescence(i32 alpha, i32 beta, u8 ply, Game& game);
 
-    void mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game);
+    void mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game, u8 ply);
 
     // Returns true if we are past deadline
     bool check_deadline();

@@ -43,11 +43,10 @@ struct TTEntry {
 };
 
 struct TransTable {
-    TTEntry* table;
+    TTEntry table[TT_SIZE];
     u16 age;
 
     TransTable();
-    ~TransTable();
 
     void put(TTEntry entry, u64 hash);
 

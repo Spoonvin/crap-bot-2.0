@@ -11,7 +11,7 @@
 
 #define MAX_PLY 80
 
-struct Searcher{
+struct Searcher {
 
     u8 base_depth;
 
@@ -22,7 +22,7 @@ struct Searcher{
 
     bool stop_search;
 
-    TransTable trans_table;
+    TransTable* trans_table;
     OpeningBook book;
 
     Move killers[MAX_PLY];
@@ -33,8 +33,6 @@ struct Searcher{
 
     Searcher(u8 depth);
     Searcher(u32 search_time);
-
-    ~Searcher();
 
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);

@@ -9,6 +9,8 @@ struct Bot : Model {
 
   Bot();
   Bot(u32 time_lim);
+
+  ~Bot();
   
   Move select_best(Game& game) override;
 

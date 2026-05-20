@@ -2,13 +2,16 @@
 #include "search/search_old.h"
 
 #define DEPTH 4
-#define TIME_LIM 700
+#define TIME_LIM 800
 
 
 BotOld::BotOld() : searcher((u32)TIME_LIM) {}
 
 BotOld::BotOld(u32 time_lim) : searcher(time_lim) {}
 
+BotOld::~BotOld() {
+    delete this->searcher.trans_table;
+}
 
 Move BotOld::select_best(Game& game) {
     return searcher.get_best_move(game);

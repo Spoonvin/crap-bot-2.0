@@ -42,11 +42,13 @@ TTType TTEntry::get_type() const {
 
 TransTable::TransTable() {
     init();
+    this->age = 0;
 }
 
+/*
 TransTable::~TransTable() {
     delete[] table;
-}
+}*/
 
 void TransTable::put(TTEntry entry, u64 hash) {
     u32 idx = (hash & (TT_SIZE-1));
@@ -89,8 +91,9 @@ Move TransTable::get_pv_move(u64 hash) {
 }
 
 void TransTable::init() {
-    table = new TTEntry[TT_SIZE];
-    age = 0;
+    for (i32 i = 0; i < TT_SIZE; i++) {
+        this->table[i] = {};
+    }
 }
 
 bool TTEntry::is_valid() {

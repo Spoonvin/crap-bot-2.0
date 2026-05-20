@@ -29,12 +29,7 @@ Searcher::Searcher(u8 depth) : book(BOOK_PATH) {
 Searcher::Searcher(u32 search_time) : book(BOOK_PATH) {
     this->search_time = search_time;
     stop_search = false;
-
-    trans_table.init();
-}
-
-Searcher::~Searcher() {
-    delete[] trans_table.table;
+    this->trans_table = new TransTable();
 }
 
 i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
@@ -56,7 +51,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
     i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta);
     if (tt_val != UNKNOWN_TT_VALUE) {
         if (ply == 0)
-            this->root_move = trans_table.get_pv_move(game.hash);
+            this->root_move = trans_table->get_pv_move(game.hash);
         return tt_val;
     }
 
@@ -98,7 +93,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
 		}
     }
 
-    Move pv_move = this->trans_table.get_pv_move(game.hash);
+    Move pv_move = this->trans_table->get_pv_move(game.hash);
     mvv_lva_reordering(moves, pv_move, gen_result.count, game, ply);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
@@ -200,7 +195,7 @@ Move Searcher::get_best_move(Game& game) {
 
     }
 
-    this->trans_table.age++;
+    this->trans_table->age++;
 
     //std::cout << "Node searched: " << node_count << "\n";
     this->node_count = 0;
@@ -296,7 +291,7 @@ void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game
 
 i32 Searcher::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
 
-    TTEntry entry = trans_table.get(hash);
+    TTEntry entry = trans_table->get(hash);
 
     if (entry.is_valid()) {
 
@@ -326,26 +321,57 @@ i32 Searcher::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
 
 void Searcher::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type) {
     TTEntry entry = TTEntry(hash, move, depth, score, type);
-    trans_table.put(entry, hash);
+    trans_table->put(entry, hash);
 }
 
-void thread_search(Searcher* searcher, Game game) {
+void thread_search(Searcher searcher, Game game) {
 
     u8 iter_depth = 1;
+    i32 prev_score = 0;
 
-    while (std::chrono::steady_clock::now() < searcher->deadline) {
+    while (std::chrono::steady_clock::now() < searcher.deadline) {
 
-        searcher->alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
+        i32 window = 25;
+        i32 alpha = MIN_VALUE;
+        i32 beta = MAX_VALUE;
+
+        if (iter_depth > 2) {
+            alpha = prev_score - window;
+            beta = prev_score + window;
+        }
+
+        i32 score = 0;
+
+        while (true) {
+            score = searcher.alpha_beta(alpha, beta, iter_depth, 0, game, true);
+
+            if (searcher.stop_search)
+                break;
+
+            if (score <= alpha) {
+                alpha = MIN_VALUE;
+            } else if (score >= beta) {
+                beta = MAX_VALUE;
+            } else {
+                break;
+            }
+            
+        }
+
+        prev_score = score;
 
         iter_depth++;
-    }
 
-    std::cout << "Depth: " << (int)iter_depth - 1 << "\n";
+    }
 
     return;
 }
 
 Move Searcher::get_best_move_parallel(Game& game) {
+
+    Move book_move = this->book.lookup_position(game);
+    if (!book_move.is_null())
+        return book_move;
 
     stop_search = false;
     deadline = std::chrono::steady_clock::now()
@@ -354,25 +380,58 @@ Move Searcher::get_best_move_parallel(Game& game) {
     std::vector<std::thread> threads;
 
     for (int i = 0; i < 3; i++) {
-        threads.emplace_back(thread_search, this, game);
+        threads.emplace_back(thread_search, *this, game);
     }
 
     u8 iter_depth = 1;
+    i32 prev_score = 0;
 
-    while (std::chrono::steady_clock::now() < this->deadline) {
+    while (std::chrono::steady_clock::now() < deadline) {
 
-        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
+        i32 window = 25;
+        i32 alpha = MIN_VALUE;
+        i32 beta = MAX_VALUE;
+
+        if (iter_depth > 2) {
+            alpha = prev_score - window;
+            beta = prev_score + window;
+        }
+
+        i32 score = 0;
+
+        while (true) {
+            score = alpha_beta(alpha, beta, iter_depth, 0, game, true);
+
+            if (this->stop_search)
+                break;
+
+            if (score <= alpha) {
+                alpha = MIN_VALUE;
+            } else if (score >= beta) {
+                beta = MAX_VALUE;
+            } else {
+                break;
+            }
+            
+        }
+
+        prev_score = score;
 
         iter_depth++;
+
     }
 
     for (auto& t : threads) {
         t.join();
     }
 
-    this->trans_table.age++;
+    this->trans_table->age++;
 
-    //std::cout << "Valid ratio: " << this->trans_table.valid_ratio() << "\n";
+    //std::cout << "Node searched: " << node_count << "\n";
+    this->node_count = 0;
 
-    return this->trans_table.get_pv_move(game.hash);
+    Move final_move = this->root_move;
+    assert(!final_move.is_null());
+
+    return final_move;
 }
