@@ -14,5 +14,5 @@ Bot::~Bot() {
 }
 
 Move Bot::select_best(Game& game) {
-    return searcher.get_best_move_parallel(game);
+    return searcher.get_best_move(game);
 }

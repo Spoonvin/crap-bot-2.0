@@ -11,6 +11,7 @@
 #include "search/zobrist_hash.h"
 #include "arena/benchmark.h"
 #include "search/opening_book.h"
+#include "UCI/uci.h"
 
 typedef void (*CommandFunction)(i32 argc, char** argv);
 
@@ -98,6 +99,8 @@ void test_fen(i32 argc, char** argv) {
 }
 
 const Command commands[] = {
+  {"uci", "run the Universal Chess Interface command loop.",
+   [](i32, char**) { UCI::loop(); }},
   {"play", "play <color> : play vs the bot.", play},
   {"test_fen", "test_fen <FEN> <search-time> : print the best move from position.", test_fen},
   {"benchmark", "benchmark <iterations> : benchmark bot against old bot.", benchmark}
@@ -107,12 +110,12 @@ const int numCommands = sizeof(commands) / sizeof(Command);
 
 i32 main(i32 argc, char** argv) {
 
-  if (argc < 2) {
-    std::cout << "Specify command\n";
-    return 1;
-  } 
-
   init_hash_key_map();
+
+  if (argc < 2) {
+    UCI::loop();
+    return 0;
+  }
 
   const char* command_name = argv[1];
   const char* options = (argc > 2) ? argv[2] : "";
