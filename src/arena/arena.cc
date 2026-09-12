@@ -6,10 +6,6 @@
 
 #include <iostream>
 
-#ifndef USE_GUI
-#define USE_GUI 1
-#endif
-
 #if USE_GUI
 #include "gui/gui.h"
 #endif

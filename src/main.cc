@@ -2,7 +2,9 @@
 #include <cstring>
 #include <iostream>
 
+#if USE_GUI
 #include "model/human.h"
+#endif
 #include "model/bot.h"
 #include "model/bot_old.h"
 #include "search/evaluation.h"
@@ -22,6 +24,7 @@ struct Command {
 };
 
 void play(i32 argc, char** argv) {
+#if USE_GUI
 
   Game game;
   game = Game::initial();
@@ -51,6 +54,12 @@ void play(i32 argc, char** argv) {
   delete black;
 
   return;
+#else
+  (void)argc;
+  (void)argv;
+  std::cout << "The GUI is not enabled in this build. Rebuild with "
+               "`make USE_GUI=1` to use the play command.\n";
+#endif
 }
 
 void benchmark(i32 argc, char** argv) {
