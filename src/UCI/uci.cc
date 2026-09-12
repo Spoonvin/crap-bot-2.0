@@ -10,12 +10,12 @@
 
 #include "chess/game.h"
 #include "chess/move/movegen.h"
-#include "model/bot.h"
+#include "search/search.h"
 
 namespace {
 
 constexpr unsigned int DEFAULT_MOVE_TIME_MS = 800;
-constexpr unsigned int MIN_SEARCH_TIME_MS = 10;
+constexpr unsigned int MIN_SEARCH_TIME_MS = 50;
 
 bool is_decimal(const std::string& value) {
   return !value.empty() && std::all_of(value.begin(), value.end(),
@@ -175,7 +175,7 @@ unsigned int time_for_go(const std::string& arguments, Color turn) {
   return DEFAULT_MOVE_TIME_MS;
 }
 
-void go(Game& game, const std::string& arguments) {
+void go(Game& game, const std::string& arguments, Searcher& searcher) {
   MoveList legal_moves;
   const GenResult generated = gen_legal(game, legal_moves);
   if (generated.count == 0) {
@@ -186,8 +186,8 @@ void go(Game& game, const std::string& arguments) {
   const unsigned int requested_time = time_for_go(arguments, game.turn);
   Move best_move = legal_moves[0];
   if (requested_time >= MIN_SEARCH_TIME_MS) {
-    Bot bot(requested_time);
-    best_move = bot.select_best(game);
+    searcher.set_search_time(requested_time);
+    best_move = searcher.get_best_move(game);
   }
 
   char algebraic[6];
@@ -201,6 +201,7 @@ namespace UCI {
 
 void loop() {
   Game game = Game::initial();
+  Searcher searcher(DEFAULT_MOVE_TIME_MS);
   std::string line;
   while (std::getline(std::cin, line)) {
     std::istringstream input(line);
@@ -222,7 +223,8 @@ void loop() {
       }
     } else if (command == "go") {
       const size_t first_space = line.find_first_of(" \t");
-      go(game, first_space == std::string::npos ? "" : line.substr(first_space));
+      go(game, first_space == std::string::npos ? "" : line.substr(first_space),
+         searcher);
     } else if (command == "quit") {
       break;
     }

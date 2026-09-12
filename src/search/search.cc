@@ -20,16 +20,18 @@ struct MoveMvvLvaScore{
     i32 score;
 };
 
-Searcher::Searcher(u8 depth) : book(BOOK_PATH) {
+Searcher::Searcher(u8 depth)
+    : base_depth(depth), root_move(Move::null()), search_time(0),
+      stop_search(false), trans_table(std::make_shared<TransTable>()),
+      book(BOOK_PATH), killers{}, node_count(0) {}
 
-    base_depth = depth;
-    stop_search = false;
-}
+Searcher::Searcher(u32 search_time)
+    : base_depth(0), root_move(Move::null()), search_time(search_time),
+      stop_search(false), trans_table(std::make_shared<TransTable>()),
+      book(BOOK_PATH), killers{}, node_count(0) {}
 
-Searcher::Searcher(u32 search_time) : book(BOOK_PATH) {
+void Searcher::set_search_time(u32 search_time) {
     this->search_time = search_time;
-    stop_search = false;
-    this->trans_table = new TransTable();
 }
 
 i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {

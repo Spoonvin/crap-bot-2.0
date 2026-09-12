@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <atomic>
+#include <memory>
 
 #define MAX_PLY 80
 
@@ -22,7 +23,7 @@ struct Searcher {
 
     bool stop_search;
 
-    TransTable* trans_table;
+    std::shared_ptr<TransTable> trans_table;
     OpeningBook book;
 
     Move killers[MAX_PLY];
@@ -33,6 +34,8 @@ struct Searcher {
 
     Searcher(u8 depth);
     Searcher(u32 search_time);
+
+    void set_search_time(u32 search_time);
 
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);
