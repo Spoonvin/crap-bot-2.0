@@ -86,6 +86,7 @@ void benchmark(i32 argc, char** argv) {
 
 }
 
+// Prints legal moves and best move
 void test_fen(i32 argc, char** argv) {
 
   const char* fen = argv[2];
@@ -95,6 +96,20 @@ void test_fen(i32 argc, char** argv) {
 
   Game game;
   game = Game::from_fen(fen);
+
+  MoveList moves = {};
+  GenResult res = gen_legal(game, moves);
+
+  std::cout << "Legal moves: " << "\n";
+
+  for (u8 i = 0; i < res.count; ++i) {
+    Move move = moves[i];
+
+    char mv[6] = {};
+    move.store_alg(mv);
+
+    std::cout << mv << "\n";
+  }
 
   Bot* bot= new Bot((u32)time_limit);
 

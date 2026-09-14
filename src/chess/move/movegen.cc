@@ -317,7 +317,8 @@ struct MoveGenerator {
       // Verify that en passant does not expose king to check
 
       // Preview occupancy after en passant
-      Mask occ_ep = occ ^ (dp_mask | pos_mask(pos));
+      Mask occ_ep = 
+        (occ & ~(dp_mask | pos_mask(pos))) | ep_mask;
 
       // Test king against sliders
       if (in_slide_atk(king_pos, occ_ep)) {
@@ -468,7 +469,7 @@ struct MoveGenerator {
 
   u8 gen_king(MoveList& moves, u8 count, Check ct) {
     Mask atk = king_atk_mask(king_pos) & ~act_occ;
-    if (non_quiet_generation && ct == NO_CHECK) atk &= wait_cc;
+    if (non_quiet_generation && (ct == NO_CHECK)) atk &= wait_cc;
 
     // Exclude king from occupancy to prevent self-blocking attacks
     Mask occ = this->occ ^ pos_mask(king_pos);
