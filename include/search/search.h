@@ -51,7 +51,7 @@ struct Searcher {
     // Returns true if we are past deadline
     bool check_deadline();
 
-    i32 probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta);
-    void record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type);
+    i32 probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta, u8 ply);
+    void record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type, u8 ply);
 
 };
