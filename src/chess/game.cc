@@ -225,9 +225,8 @@ void Game::last_turn() {
   // Toggle active player
   turn = Color(!turn);
 
-  // Increment fullmove counter
-  // Should be one for the first round
-  if (turn == WHITE) {
+  // Undo the fullmove increment made after Black's move.
+  if (turn == BLACK) {
     fm_counter--;
   }
 

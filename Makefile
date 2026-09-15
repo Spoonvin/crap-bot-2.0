@@ -29,7 +29,10 @@ DEP = $(OBJ:.o=.d)
 # Output
 TARGET = app
 
-.PHONY: all clean FORCE
+TEST_TARGET = $(BUILD_DIR)/search_test
+TEST_OBJ = $(BUILD_DIR)/tests/search_test.o
+
+.PHONY: all clean test FORCE
 
 # Default target
 all: $(TARGET)
@@ -37,6 +40,17 @@ all: $(TARGET)
 # Link
 $(TARGET): $(OBJ) FORCE
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJ) -o $@ $(LDLIBS)
+
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
+
+# Wrap the clock so interruption tests can expire at a specific search node.
+$(TEST_TARGET): $(filter-out $(BUILD_DIR)/main.o,$(OBJ)) $(TEST_OBJ)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS) -Wl,--wrap=_ZNSt6chrono3_V212steady_clock3nowEv
+
+$(TEST_OBJ): tests/search_test.cc
+	@mkdir -p $(@D)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 # `app` is shared by both configurations, so always relink it when make runs.
 FORCE:
@@ -46,7 +60,7 @@ $(BUILD_DIR)/%.o: src/%.cc
 	@mkdir -p $(@D)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
--include $(DEP)
+-include $(DEP) $(TEST_OBJ:.o=.d)
 
 # Clean
 clean:

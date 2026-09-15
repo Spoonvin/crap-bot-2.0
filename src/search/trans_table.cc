@@ -64,6 +64,12 @@ void TransTable::put(TTEntry entry, u64 hash) {
             replace = true;
         } else if (cur_entry.get_depth() < entry.get_depth()) {
             replace = true;
+        } else if ((cur_entry.key ^ cur_entry.data) == hash &&
+                   cur_entry.get_depth() == entry.get_depth() &&
+                   (entry.get_type() == EXACT || cur_entry.get_type() != EXACT)) {
+            // An aspiration re-search can improve the bound or find a new PV
+            // at the same depth. Preserve an existing exact result over a bound.
+            replace = true;
         }
     }
 
@@ -109,4 +115,3 @@ f32 TransTable::valid_ratio(){
 
     return (f32)num_valid / (f32)TT_SIZE;
 }
-

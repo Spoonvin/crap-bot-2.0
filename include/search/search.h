@@ -44,6 +44,8 @@ struct Searcher {
 
     private:
 
+    void iterative_deepening(Game& game);
+
     i32 quiescence(i32 alpha, i32 beta, u8 ply, Game& game);
 
     void mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game& game, u8 ply);

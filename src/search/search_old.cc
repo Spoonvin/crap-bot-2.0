@@ -11,7 +11,7 @@
 #include <iostream>
 #include <thread>
 
-#define BOOK_PATH "/home/spoonvin/projects/chess-parallel/assets/Book.txt"
+#define BOOK_PATH "/home/edvin/projects/crap-bot-2.0/assets/Book.txt"
 
 #define KILLER_BONUS 300
 
