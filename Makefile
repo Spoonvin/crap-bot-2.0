@@ -5,7 +5,7 @@ CXX = g++
 USE_GUI ?= 0
 
 # Flags
-CXXFLAGS = -Ofast -march=native -mtune=native -flto -std=c++17
+CXXFLAGS = -Ofast -march=native -mtune=native -flto -std=c++17 -pthread
 CPPFLAGS = -Iinclude
 
 # Files
@@ -41,8 +41,9 @@ all: $(TARGET)
 $(TARGET): $(OBJ) FORCE
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJ) -o $@ $(LDLIBS)
 
-test: $(TEST_TARGET)
+test: $(TEST_TARGET) $(TARGET)
 	./$(TEST_TARGET)
+	python3 tests/uci_test.py ./$(TARGET)
 
 # Wrap the clock so interruption tests can expire at a specific search node.
 $(TEST_TARGET): $(filter-out $(BUILD_DIR)/main.o,$(OBJ)) $(TEST_OBJ)

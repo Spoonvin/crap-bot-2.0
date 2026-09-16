@@ -22,6 +22,10 @@ struct Searcher {
     std::chrono::steady_clock::time_point deadline;
 
     bool stop_search;
+    // Shared by all workers; reset by the caller before starting a new search.
+    std::shared_ptr<std::atomic<bool>> cancel =
+        std::make_shared<std::atomic<bool>>(false);
+    unsigned int thread_count = 4;
 
     std::shared_ptr<TransTable> trans_table;
     OpeningBook book;

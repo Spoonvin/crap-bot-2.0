@@ -12,7 +12,7 @@ SDL3 and SDL3-image are only required when building the GUI.
 make all
 ```
 
-Run the search regression tests with `make test`.
+Run the search and UCI regression tests with `make test` (requires Python 3).
 
 To build with the GUI, install SDL3 and SDL3-image, then run:
 

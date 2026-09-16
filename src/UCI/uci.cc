@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <condition_variable>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "chess/game.h"
 #include "chess/move/movegen.h"
@@ -16,6 +19,15 @@ namespace {
 
 constexpr unsigned int DEFAULT_MOVE_TIME_MS = 800;
 constexpr unsigned int MIN_SEARCH_TIME_MS = 50;
+constexpr unsigned int DEFAULT_MOVE_OVERHEAD_MS = 100;
+constexpr unsigned int MAX_MOVE_OVERHEAD_MS = 5000;
+
+std::mutex output_mutex;
+
+void send(const std::string& message) {
+  std::lock_guard<std::mutex> lock(output_mutex);
+  std::cout << message << '\n' << std::flush;
+}
 
 bool is_decimal(const std::string& value) {
   return !value.empty() && std::all_of(value.begin(), value.end(),
@@ -132,21 +144,25 @@ unsigned int parse_nonnegative(const std::string& value) {
   return parsed > UINT_MAX ? UINT_MAX : static_cast<unsigned int>(parsed);
 }
 
-unsigned int time_for_go(const std::string& arguments, Color turn) {
+unsigned int time_for_go(const std::string& arguments, Color turn,
+                         unsigned int overhead) {
   std::istringstream input(arguments);
   std::string key;
   unsigned int move_time = 0;
   unsigned int clock_time = 0;
   unsigned int increment = 0;
+  unsigned int moves_to_go = 30;
+  bool infinite = false;
   bool has_move_time = false;
   bool has_clock_time = false;
 
   while (input >> key) {
     if (key == "movetime" || key == "wtime" || key == "btime" ||
-        key == "winc" || key == "binc") {
+        key == "winc" || key == "binc" || key == "movestogo") {
       std::string value;
       if (!(input >> value)) break;
       const unsigned int millis = parse_nonnegative(value);
+      if (key == "movestogo") moves_to_go = std::max(1u, millis);
       if (key == "movetime") {
         has_move_time = true;
         move_time = millis;
@@ -158,41 +174,63 @@ unsigned int time_for_go(const std::string& arguments, Color turn) {
       }
       if ((key == "winc" && turn == WHITE) ||
           (key == "binc" && turn == BLACK)) increment = millis;
-    }
+    } else if (key == "infinite") infinite = true;
   }
 
-  if (has_move_time) return move_time;
+  if (infinite) return UINT_MAX;
+  if (has_move_time) return move_time > overhead ? move_time - overhead : 0;
   if (has_clock_time) {
-    // Keep most of the clock in reserve; this engine has no pondering or
-    // asynchronous stop support yet.
+    // The increment is credited after the move; never spend it in advance.
+    const unsigned int available = clock_time > overhead ? clock_time - overhead : 0;
     const unsigned long long allocated =
-        static_cast<unsigned long long>(clock_time) / 30 +
+        static_cast<unsigned long long>(available) / moves_to_go +
         static_cast<unsigned long long>(increment) * 3 / 4;
-    return std::max(1u, allocated > UINT_MAX
-        ? UINT_MAX
-        : static_cast<unsigned int>(allocated));
+    return static_cast<unsigned int>(std::min<unsigned long long>(available, allocated));
   }
   return DEFAULT_MOVE_TIME_MS;
 }
 
-void go(Game& game, const std::string& arguments, Searcher& searcher) {
+Move go(Game& game, unsigned int requested_time, Searcher& searcher) {
   MoveList legal_moves;
   const GenResult generated = gen_legal(game, legal_moves);
   if (generated.count == 0) {
-    std::cout << "bestmove 0000\n" << std::flush;
-    return;
+    return Move::null();
   }
 
-  const unsigned int requested_time = time_for_go(arguments, game.turn);
   Move best_move = legal_moves[0];
   if (requested_time >= MIN_SEARCH_TIME_MS) {
     searcher.set_search_time(requested_time);
-    best_move = searcher.get_best_move(game);
+    best_move = searcher.get_best_move_parallel(game);
   }
 
-  char algebraic[6];
-  best_move.store_alg(algebraic);
-  std::cout << "bestmove " << algebraic << '\n' << std::flush;
+  return best_move;
+}
+
+void set_option(const std::string& arguments, Searcher& searcher,
+                unsigned int& overhead) {
+  std::istringstream input(arguments);
+  std::string token, name, value, extra;
+  if (!(input >> token) || token != "name") return;
+  while (input >> token && token != "value") {
+    if (!name.empty()) name += ' ';
+    name += token;
+  }
+  if (token != "value" || !(input >> value) || (input >> extra) ||
+      !is_decimal(value)) return;
+  std::transform(name.begin(), name.end(), name.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  const unsigned int number = parse_nonnegative(value);
+  if (name == "move overhead" && number <= MAX_MOVE_OVERHEAD_MS) {
+    overhead = number;
+  } else if (name == "threads" && number >= 1 && number <= 128) {
+    searcher.thread_count = number;
+  } else if (name == "hash" && number >= 1 && number <= 4096) {
+    try {
+      searcher.trans_table->resize(number);
+    } catch (const std::bad_alloc&) {
+      send("info string Unable to allocate requested Hash size; keeping previous table");
+    }
+  }
 }
 
 }  // namespace
@@ -202,33 +240,77 @@ namespace UCI {
 void loop() {
   Game game = Game::initial();
   Searcher searcher(DEFAULT_MOVE_TIME_MS);
+  unsigned int overhead = DEFAULT_MOVE_OVERHEAD_MS;
+  std::thread worker;
+  std::mutex stop_mutex;
+  std::condition_variable stopped;
+  auto stop = [&] {
+    {
+      std::lock_guard<std::mutex> lock(stop_mutex);
+      searcher.cancel->store(true, std::memory_order_relaxed);
+    }
+    stopped.notify_all();
+    if (worker.joinable()) worker.join();
+  };
   std::string line;
   while (std::getline(std::cin, line)) {
     std::istringstream input(line);
     std::string command;
     input >> command;
+    std::string arguments;
+    std::getline(input, arguments);
 
     if (command == "uci") {
-      std::cout << "id name Chess Parallel\n"
-                << "id author Chess Parallel contributors\n"
-                << "uciok\n" << std::flush;
+      send("id name Chess Parallel\n"
+           "id author Chess Parallel contributors\n"
+           "option name Move Overhead type spin default 100 min 0 max 5000\n"
+           "option name Threads type spin default 4 min 1 max 128\n"
+           "option name Hash type spin default " +
+           std::to_string(TT_SIZE * sizeof(TTSlot) / (1024 * 1024)) +
+           " min 1 max 4096\nuciok");
     } else if (command == "isready") {
-      std::cout << "readyok\n" << std::flush;
+      send("readyok");
+    } else if (command == "setoption") {
+      stop();
+      set_option(arguments, searcher, overhead);
     } else if (command == "ucinewgame") {
+      stop();
       game = Game::initial();
+      searcher.trans_table->init();
+      searcher.trans_table->age = 0;
+      std::fill(std::begin(searcher.killers), std::end(searcher.killers), Move::null());
     } else if (command == "position") {
-      const size_t first_space = line.find_first_of(" \t");
-      if (first_space != std::string::npos) {
-        set_position(&game, line.substr(first_space));
-      }
+      stop();
+      set_position(&game, arguments);
     } else if (command == "go") {
-      const size_t first_space = line.find_first_of(" \t");
-      go(game, first_space == std::string::npos ? "" : line.substr(first_space),
-         searcher);
+      stop();
+      searcher.cancel->store(false, std::memory_order_relaxed);
+      const unsigned int duration = time_for_go(arguments, game.turn, overhead);
+      std::istringstream parameters(arguments);
+      std::string parameter;
+      bool infinite = false;
+      while (parameters >> parameter) infinite |= parameter == "infinite";
+      worker = std::thread([&, position = game, duration, infinite]() mutable {
+        const Move best_move = go(position, duration, searcher);
+        if (infinite) {
+          std::unique_lock<std::mutex> lock(stop_mutex);
+          stopped.wait(lock, [&] { return searcher.cancel->load(std::memory_order_relaxed); });
+        }
+        char algebraic[6];
+        if (best_move.is_null()) {
+          send("bestmove 0000");
+        } else {
+          best_move.store_alg(algebraic);
+          send(std::string("bestmove ") + algebraic);
+        }
+      });
+    } else if (command == "stop") {
+      stop();
     } else if (command == "quit") {
       break;
     }
   }
+  stop();
 }
 
 }  // namespace UCI

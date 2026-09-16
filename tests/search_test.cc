@@ -2,12 +2,15 @@
 #include "search/zobrist_hash.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -89,6 +92,155 @@ void test_same_depth_replacement(Searcher& searcher) {
     require(table.get(hash).get_move().data == b.data &&
             table.get(hash).get_score() == 175,
             "a new same-depth bound must be able to refresh its move and score");
+}
+
+void test_hash_resize(Searcher& searcher) {
+    auto& table = *searcher.trans_table;
+    for (unsigned int megabytes : {1u, 3u, 8u}) {
+        table.resize(megabytes);
+        require(table.size * sizeof(TTSlot) <= megabytes * 1024 * 1024 &&
+                (table.size & (table.size - 1)) == 0,
+                "Hash must allocate a power-of-two table within its memory budget");
+        const u64 hash = 0xfedcba9876543210ULL;
+        table.put(TTEntry(hash, Move::normal(0, 1), 5, 125, EXACT), hash);
+        require(table.get(hash).get_score() == 125,
+                "resized tables must retain and probe entries using their new mask");
+        table.init();
+        require(!table.get(hash).is_valid() && table.valid_ratio() == 0,
+                "clearing a resized table must remove its entries");
+    }
+}
+
+void test_tt_snapshot_validation(Searcher& searcher) {
+    reset(searcher);
+    auto& table = *searcher.trans_table;
+    const u64 hash = 0x12345;
+    const TTEntry a(hash, Move::normal(0, 1), 5, -125, EXACT);
+    const TTEntry b(hash, Move::normal(1, 2), 5, 250, LOWER);
+
+    require(!table.get(hash).is_valid(), "a cleared atomic slot must be a miss");
+    table.put(a, hash);
+    const TTEntry saved = table.get(hash);
+    require(saved.data == a.data && saved.get_score() == -125,
+            "an atomic slot must preserve the complete packed payload");
+
+    // Model a reader observing the data and key from different writes.
+    table.table[hash & (TT_SIZE - 1)].key.store(b.key, std::memory_order_relaxed);
+    require(!table.get(hash).is_valid() && table.get_pv_move(hash).is_null(),
+            "a mismatched key/data pair must not reach the search");
+    require(saved.data == a.data && saved.key == a.key,
+            "a returned snapshot must remain independent of later writes");
+}
+
+void test_concurrent_tt_access(Searcher& searcher) {
+    reset(searcher);
+    auto& table = *searcher.trans_table;
+    const u64 hash = 0x12345;
+    std::array<TTEntry, 4> entries;
+    for (size_t i = 0; i < entries.size(); ++i)
+        entries[i] = TTEntry(hash, Move::normal(i, i + 8), 5,
+                            -300 + static_cast<i32>(i) * 200, EXACT);
+    table.put(entries[0], hash);
+
+    std::atomic<unsigned> ready{0};
+    std::atomic<bool> start{false};
+    std::array<std::thread, 8> workers;
+    for (size_t i = 0; i < workers.size(); ++i) {
+        workers[i] = std::thread([&, i] {
+            ready.fetch_add(1, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int iteration = 0; iteration < 25000; ++iteration) {
+                if (i < entries.size()) table.put(entries[i], hash);
+                const TTEntry result = table.get(hash);
+                if (!result.is_valid()) continue; // Mixed snapshots may miss.
+                require(std::any_of(entries.begin(), entries.end(),
+                            [&](const TTEntry& entry) { return entry.data == result.data; }),
+                        "a concurrent hit must contain one of the written payloads");
+            }
+        });
+    }
+    while (ready.load(std::memory_order_acquire) != workers.size())
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    const f32 ratio = table.valid_ratio();
+    require(ratio >= 0 && ratio <= 1, "concurrent occupancy scans must stay in range");
+    for (auto& worker : workers) worker.join();
+
+    // Interleaved writers may leave a mismatched slot. A later generation must
+    // still be able to replace it after all workers have stopped.
+    ++table.age;
+    table.put(entries[0], hash);
+    const TTEntry result = table.get(hash);
+    require(result.data == entries[0].data && result.age == table.age,
+            "a quiescent write must restore a readable entry and generation");
+}
+
+void test_ply_limit(Searcher& searcher) {
+    reset(searcher);
+    for (const char* position : {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "4k3/8/8/8/8/8/4r3/4K2R w - - 0 1"}) {
+        Game game = Game::from_fen(position);
+        const std::string before = fen(game);
+        const u64 hash = game.hash;
+        const i32 expected = eval_game(game);
+        for (u8 ply : {u8{MAX_PLY}, std::numeric_limits<u8>::max()}) {
+            for (u8 depth : {u8{0}, u8{2}}) {
+                searcher.node_count = 0;
+                const i32 score = searcher.alpha_beta(MIN_VALUE, MAX_VALUE,
+                                                      depth, ply, game, false);
+                require(score == expected && searcher.node_count == 1,
+                        "search at or beyond MAX_PLY must stop without recursion");
+            }
+        }
+
+        MoveList moves;
+        const GenResult generated = gen_legal(game, moves);
+        searcher.node_count = 0;
+        searcher.alpha_beta(MIN_VALUE, MAX_VALUE, 2, MAX_PLY - 1, game, false);
+        require(searcher.node_count > 1 && searcher.node_count <= generated.count + 1,
+                "children must stop at MAX_PLY even after a check extension");
+        require(fen(game) == before && game.hash == hash && game.state_stack.size == 0,
+                "the ply limit must preserve the board, hash, and undo stack");
+    }
+
+    // Enter quiescence one ply below the boundary and exercise its capture path.
+    Game game = Game::from_fen("4k3/8/8/3p4/3Q4/8/8/4K3 w - - 0 1");
+    const std::string before = fen(game);
+    const u64 hash = game.hash;
+    MoveList moves;
+    const GenResult generated = gen_non_quiet(game, moves);
+    searcher.node_count = 0;
+    searcher.alpha_beta(MIN_VALUE, MAX_VALUE, 0, MAX_PLY - 1, game, false);
+    require(searcher.node_count > 2 && searcher.node_count <= generated.count + 2,
+            "quiescence captures must also stop at MAX_PLY");
+    require(fen(game) == before && game.hash == hash && game.state_stack.size == 0,
+            "quiescence at the ply limit must restore the position");
+}
+
+void test_parallel_search(Searcher& searcher) {
+    reset(searcher);
+    searcher.set_search_time(200);
+    Game game = Game::from_fen(
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    require(searcher.book.lookup_position(game).is_null(),
+            "parallel search test must search outside the opening book");
+    const std::string before = fen(game);
+    const u64 hash = game.hash;
+    MoveList moves;
+    const GenResult generated = gen_legal(game, moves);
+    for (int iteration = 0; iteration < 2; ++iteration) {
+        const u16 age = searcher.trans_table->age;
+        const Move result = searcher.get_best_move_parallel(game);
+        require(std::any_of(std::begin(moves), std::begin(moves) + generated.count,
+                            [&](Move move) { return move.data == result.data; }),
+                "a nonzero-time parallel search must return a legal move");
+        require(fen(game) == before && game.hash == hash && game.state_stack.size == 0,
+                "parallel search must restore the caller's position");
+        require(searcher.trans_table->age == static_cast<u16>(age + 1),
+                "parallel search must advance the shared generation exactly once");
+    }
 }
 
 void test_saved_pv_first(Searcher& searcher) {
@@ -276,6 +428,10 @@ int main() {
     init_hash_key_map();
     Searcher searcher(u32{0});
     test_same_depth_replacement(searcher);
+    test_tt_snapshot_validation(searcher);
+    test_concurrent_tt_access(searcher);
+    test_ply_limit(searcher);
+    test_parallel_search(searcher);
     test_saved_pv_first(searcher);
     test_root_bound_does_not_select_move(searcher);
     test_fail_low_preserves_move(searcher);
@@ -284,5 +440,6 @@ int main() {
     test_interrupted_quiescence(searcher);
     test_interrupted_aspiration_retry(searcher);
     test_zero_time_and_terminal_positions(searcher);
+    test_hash_resize(searcher);
     std::cout << "Search regression tests passed\n";
 }

@@ -2,7 +2,7 @@
 #include "search/search.h"
 
 #define DEPTH 4
-#define TIME_LIM 800
+#define TIME_LIM 1000
 
 
 Bot::Bot() : searcher((u32)TIME_LIM) {}
@@ -10,5 +10,5 @@ Bot::Bot() : searcher((u32)TIME_LIM) {}
 Bot::Bot(u32 time_lim) : searcher(time_lim) {}
 
 Move Bot::select_best(Game& game) {
-    return searcher.get_best_move(game);
+    return searcher.get_best_move_parallel(game);
 }

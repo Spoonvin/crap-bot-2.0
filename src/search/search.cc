@@ -64,6 +64,10 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
         return 0;
     }
 
+    // Check extensions can exceed the iteration depth. Stop before indexing
+    // killers[ply] or recursing beyond the supported mate-distance range.
+    if (ply >= MAX_PLY) return eval_game(game);
+
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
         if (tt_val != UNKNOWN_TT_VALUE)
@@ -158,7 +162,8 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
 
 bool Searcher::check_deadline() {
 
-    if (std::chrono::steady_clock::now() < deadline) return false;
+    if (!cancel->load(std::memory_order_relaxed) &&
+        std::chrono::steady_clock::now() < deadline) return false;
 
     stop_search = true;
     return true;
@@ -332,7 +337,7 @@ void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game
 
 i32 Searcher::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta, u8 ply) {
 
-    TTEntry entry = trans_table->get(hash);
+    const TTEntry entry = trans_table->get(hash);
 
     if (entry.is_valid()) {
 
@@ -377,7 +382,7 @@ Move Searcher::get_best_move_parallel(Game& game) {
 
     std::vector<std::thread> threads;
 
-    for (int i = 0; i < 3; i++) {
+    for (unsigned int i = 1; i < thread_count; i++) {
         threads.emplace_back([searcher = *this, game]() mutable {
             searcher.iterative_deepening(game);
         });
@@ -389,6 +394,7 @@ Move Searcher::get_best_move_parallel(Game& game) {
         t.join();
     }
 
+    // The generation is shared but non-atomic; all TT users have now stopped.
     this->trans_table->age++;
 
     //std::cout << "Node searched: " << node_count << "\n";

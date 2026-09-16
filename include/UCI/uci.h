@@ -2,7 +2,7 @@
 
 namespace UCI {
 
-// Runs the synchronous Universal Chess Interface command loop.
+// Runs the Universal Chess Interface loop with interruptible background search.
 void loop();
 
 }  // namespace UCI
