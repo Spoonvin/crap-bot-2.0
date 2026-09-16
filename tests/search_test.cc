@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <functional>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -50,6 +51,65 @@ std::string fen(Game& game) {
     char buffer[MAX_FEN];
     game.store_fen(buffer);
     return buffer;
+}
+
+void play_moves(Game& game, std::initializer_list<const char*> notations) {
+    for (const char* notation : notations) {
+        MoveList moves;
+        const GenResult generated = gen_legal(game, moves);
+        Move selected = Move::null();
+        for (u8 i = 0; i < generated.count; ++i) {
+            char algebraic[6];
+            moves[i].store_alg(algebraic);
+            if (std::string(notation) == algebraic) {
+                selected = moves[i];
+                break;
+            }
+        }
+        require(!selected.is_null(), "repetition test moves must be legal");
+        game.make_move(selected);
+    }
+}
+
+void test_threefold_repetition() {
+    Game game = Game::initial();
+    require(!game.is_3fr(), "an empty history must not count as repetition");
+    for (int cycle = 1; cycle <= 2; ++cycle) {
+        play_moves(game, {"g1f3", "g8f6", "f3g1", "f6g8"});
+        require(game.is_3fr() == (cycle == 2),
+                "threefold repetition requires two earlier occurrences");
+    }
+    game.make_null_move();
+    require(!game.is_3fr(), "a null move must start a new repetition history");
+    game.unmake_null_move();
+    require(game.is_3fr(), "undoing a null move must restore repetition history");
+}
+
+void test_repetition_null_boundary() {
+    Game game = Game::from_fen("6nk/8/8/8/8/8/8/KN6 b - - 0 1");
+    // Repeat the board with Black to move, then return with White to move.
+    play_moves(game, {"g8f6", "b1c3", "f6g8", "c3b1",
+                      "h8h7", "b1c3", "h7g7", "c3b1", "g7h8"});
+    require(!game.is_3fr(), "opposite sides to move are different positions");
+    game.make_null_move();
+
+    for (bool switch_side : {false, true}) {
+        Game branch = game;
+        // An odd-length cycle makes the pre-null position a potential match,
+        // testing that the boundary itself is excluded as well as older states.
+        if (switch_side)
+            play_moves(branch, {"h8h7", "b1c3", "h7g7", "c3b1", "g7h8"});
+        require(!branch.is_3fr(), "repetition must not cross a null move");
+
+        for (int cycle = 1; cycle <= 2; ++cycle) {
+            if (switch_side)
+                play_moves(branch, {"b1c3", "g8f6", "c3b1", "f6g8"});
+            else
+                play_moves(branch, {"g8f6", "b1c3", "f6g8", "c3b1"});
+            require(branch.is_3fr() == (cycle == 2),
+                    "only occurrences after the null move may count");
+        }
+    }
 }
 
 void cache_child(Searcher& searcher, Game& game, Move move, i32 root_score,
@@ -502,6 +562,8 @@ __wrap__ZNSt6chrono3_V212steady_clock3nowEv() {
 
 int main() {
     init_hash_key_map();
+    test_threefold_repetition();
+    test_repetition_null_boundary();
     Searcher searcher(u32{0});
     test_same_depth_replacement(searcher);
     test_tt_snapshot_validation(searcher);

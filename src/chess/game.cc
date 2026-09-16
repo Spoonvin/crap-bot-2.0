@@ -642,8 +642,13 @@ StateStackEntry StateStack::pop() {
 bool StateStack::is_3fr(u64 hash) {
   i32 n_repetitions = 1;
 
-  for (i32 i = this->size-2; i >= 0; i -= 2) {
-    StateStackEntry entry = this->entries[i];
+  // Check every move for a boundary, including null moves on either ply parity.
+  // Entries store pre-move positions, so exclude the boundary entry itself.
+  for (i32 i = this->size-1; i >= 0; --i) {
+    const StateStackEntry& entry = this->entries[i];
+
+    if (entry.irreversible)
+      break;
 
     if (entry.hash == hash) {
       n_repetitions++;
@@ -651,9 +656,6 @@ bool StateStack::is_3fr(u64 hash) {
       if (n_repetitions >= 3)
         return true;
     }
-
-    if (entry.irreversible)
-      break;
   }
 
   return false;
