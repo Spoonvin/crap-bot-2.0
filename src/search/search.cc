@@ -92,6 +92,9 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
         }
     }
 
+    // Probes use the requested depth, before this node's check extension.
+    // Store the same depth so this result cannot satisfy a deeper request.
+    const u8 tt_depth = depth;
     if (gen_result.check != NO_CHECK)
         depth++;
     
@@ -142,7 +145,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
         }
 
         if(branch_val >= beta) {
-            record_trans_table(game.hash, depth, best_move, beta, LOWER, ply);
+            record_trans_table(game.hash, tt_depth, best_move, beta, LOWER, ply);
 
             // Homemode killer heuristic
             // If move was searched late and caused cutoff ->
@@ -155,7 +158,7 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
         }
     }
 
-    record_trans_table(game.hash, depth, best_move, alpha, tt_type, ply);
+    record_trans_table(game.hash, tt_depth, best_move, alpha, tt_type, ply);
 
     return alpha;
 }
@@ -258,19 +261,19 @@ i32 Searcher::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
     }
 
     i32 static_eval = eval_game(game);
-    i32 best_val = static_eval;
-
     if (ply >= MAX_PLY) return static_eval;
-
-    if (best_val >= beta){
-        return beta;
-    }
-    if (best_val > alpha){
-        alpha = best_val;
-    }
 
     MoveList moves;
     GenResult gen_result = gen_non_quiet(game, moves);
+
+    // In check, a legal evasion is mandatory. Standing pat must neither
+    // cause a cutoff nor compete with the scores of the evasions.
+    i32 best_val = MIN_VALUE;
+    if (gen_result.check == NO_CHECK) {
+        best_val = static_eval;
+        if (best_val >= beta) return beta;
+        if (best_val > alpha) alpha = best_val;
+    }
 
     if (gen_result.count <= 0) {
         if (gen_result.check == NO_CHECK) {

@@ -176,6 +176,82 @@ void test_concurrent_tt_access(Searcher& searcher) {
             "a quiescent write must restore a readable entry and generation");
 }
 
+void test_tt_check_extension_depth(Searcher& searcher) {
+    Game game = Game::from_fen(
+        "rnbqkbnr/p1p1pppp/1p1p4/8/Q1P1P3/8/PP1P1PPP/RNB1KBNR b KQkq - 2 3");
+    const std::string before = fen(game);
+    const u64 hash = game.hash;
+    MoveList moves;
+    require(gen_legal(game, moves).check != NO_CHECK,
+            "the TT depth regression must exercise a check extension");
+
+    reset(searcher);
+    const i32 deep_score = searcher.alpha_beta(MIN_VALUE, MAX_VALUE, 2, 1, game, false);
+    reset(searcher);
+    const i32 shallow_score = searcher.alpha_beta(MIN_VALUE, MAX_VALUE, 1, 1, game, false);
+    require(shallow_score != deep_score,
+            "the TT depth regression needs different shallow and deep results");
+
+    // Save actual depth-1 searches with each bound type. The check extension
+    // must not let any of them satisfy a request for nominal depth 2.
+    for (TTType type : {EXACT, UPPER, LOWER}) {
+        reset(searcher);
+        const i32 alpha = type == UPPER ? shallow_score + 1 : MIN_VALUE;
+        const i32 beta = type == LOWER ? shallow_score - 1 : MAX_VALUE;
+        searcher.alpha_beta(alpha, beta, 1, 1, game, false);
+        const TTEntry shallow = searcher.trans_table->get(hash);
+        require(shallow.is_valid() && shallow.get_type() == type,
+                "the shallow search must save the intended TT bound");
+
+        // Isolate this entry from all descendants and reset move ordering.
+        reset(searcher);
+        searcher.trans_table->put(shallow, hash);
+        const i32 score = searcher.alpha_beta(alpha, beta, 2, 1, game, false);
+        require(searcher.node_count > 1,
+                "a check-extended depth-1 entry must not cut off depth 2");
+        require(score == std::clamp(deep_score, alpha, beta),
+                "a shallower cached check result must not replace the deeper result");
+        require(fen(game) == before && game.hash == hash && game.state_stack.size == 0,
+                "the TT depth regression must preserve the position");
+    }
+}
+
+void test_quiescence_in_check(Searcher& searcher) {
+    // The reported position after ...Qd6 Qa8+: Black has to play ...Kd7,
+    // after which Rxf7 changes the evaluation. Standing pat skips that cost.
+    Game game = Game::from_fen(
+        "Q1kr4/1pp2p2/2bq2rp/3p4/2B5/2P3P1/P1P4P/1R3RK1 b - - 2 23");
+    const std::string before = fen(game);
+    const u64 hash = game.hash;
+    MoveList moves;
+    const GenResult generated = gen_non_quiet(game, moves);
+    require(generated.check != NO_CHECK && generated.count == 1 &&
+            moves[0].data == Move::normal(58, 51).data,
+            "the quiescence regression needs the forced quiet evasion c8d7");
+
+    reset(searcher);
+    game.make_move(moves[0]);
+    const i32 forced_score = -searcher.alpha_beta(MIN_VALUE, MAX_VALUE, 0, 3, game, false);
+    game.unmake_move(moves[0]);
+    require(forced_score < eval_game(game),
+            "the forced evasion must score worse than standing pat");
+
+    for (i32 beta : {MAX_VALUE, eval_game(game)}) {
+        reset(searcher);
+        const i32 score = searcher.alpha_beta(MIN_VALUE, beta, 0, 2, game, false);
+        require(score == forced_score && searcher.node_count > 2,
+                "quiescence in check must search the evasion without a stand-pat score or cutoff");
+        require(fen(game) == before && game.hash == hash && game.state_stack.size == 0,
+                "quiescence evasions must restore the position");
+    }
+
+    reset(searcher);
+    game = Game::from_fen("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
+    const i32 score = searcher.alpha_beta(MIN_VALUE, eval_game(game) - 1, 0, 5, game, false);
+    require(score == -MATE_VALUE + 5,
+            "a stand-pat cutoff must never hide checkmate in quiescence");
+}
+
 void test_ply_limit(Searcher& searcher) {
     reset(searcher);
     for (const char* position : {
@@ -430,6 +506,8 @@ int main() {
     test_same_depth_replacement(searcher);
     test_tt_snapshot_validation(searcher);
     test_concurrent_tt_access(searcher);
+    test_tt_check_extension_depth(searcher);
+    test_quiescence_in_check(searcher);
     test_ply_limit(searcher);
     test_parallel_search(searcher);
     test_saved_pv_first(searcher);
