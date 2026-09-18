@@ -3,12 +3,14 @@
 #include "chess/game.h"
 
 #define PAWN_VALUE 100
-#define KNIGHT_VALUE 300
-#define BISHOP_VALUE 300
+#define KNIGHT_VALUE 320
+#define BISHOP_VALUE 330
 #define ROOK_VALUE 500
 #define QUEEN_VALUE 900
 #define KING_VALUE 1000 // For move ordering
 
+#define KNIGHT_VALUE_OLD 300
+#define BISHOP_VALUE_OLD 300
 
 #define MATE_VALUE 999999
 

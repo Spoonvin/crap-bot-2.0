@@ -70,7 +70,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
 
     // Check extensions can exceed the iteration depth. Stop before indexing
     // killers[ply] or recursing beyond the supported mate-distance range.
-    if (ply >= MAX_PLY) return eval_game(game);
+    if (ply >= MAX_PLY) return eval_game_old(game);
 
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
@@ -184,7 +184,7 @@ i32 SearcherOld::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_
 
     // Check extensions can exceed the iteration depth. Stop before indexing
     // killers[ply] or recursing beyond the supported mate-distance range.
-    if (ply >= MAX_PLY) return eval_game(game);
+    if (ply >= MAX_PLY) return eval_game_old(game);
 
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
@@ -215,20 +215,22 @@ i32 SearcherOld::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_
     const u8 tt_depth = depth;
     if (gen_result.check != NO_CHECK)
         depth++;
+
+    f32 eg_ratio = endgame_ratio(game);
     
-    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 3) &&
+    if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 4) &&
         game.player_has_non_pawn_piece()) {
 
-        int R = 2 + depth / 4;
+        int R = 2 + depth / 3;
 
         game.make_null_move();
-        i32 score = -pvs(-beta, -beta+1, depth-1-R, ply+1, game, false);
+        i32 score = -pvs(-beta, -beta+1, depth-R, ply+1, game, false);
         game.unmake_null_move();
 
         if (this->stop_search)
             return 0;
 
-        if (score >= beta && abs(score) < MATE_VALUE) {
+        if (score >= beta && abs(score) < (MATE_VALUE - MAX_PLY)) {
 			return beta;
 		}
     }
@@ -401,7 +403,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return 0;
     }
 
-    i32 static_eval = eval_game(game);
+    i32 static_eval = eval_game_old(game);
     if (ply >= MAX_PLY) return static_eval;
 
     MoveList moves;

@@ -161,14 +161,14 @@ i32 eval_game_old(Game& game) {
     // White Knights
     while (bitboard_white[KNIGHT]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[KNIGHT]));
-        white_score += KNIGHT_VALUE + b_knight_square_mod[pos];
+        white_score += KNIGHT_VALUE_OLD + b_knight_square_mod[pos];
     }
 
     // White Bishops
     u8 num_w_bishops = 0;
     while (bitboard_white[BISHOP]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[BISHOP]));
-        white_score += BISHOP_VALUE + b_bishop_square_mod[pos];
+        white_score += BISHOP_VALUE_OLD + b_bishop_square_mod[pos];
         num_w_bishops++;
     }
     if (num_w_bishops >= 2) {
@@ -213,14 +213,14 @@ i32 eval_game_old(Game& game) {
     // Black Knights
     while (bitboard_black[KNIGHT]) {
         Pos pos = pop_pos(bitboard_black[KNIGHT]);
-        black_score += KNIGHT_VALUE + b_knight_square_mod[pos];
+        black_score += KNIGHT_VALUE_OLD + b_knight_square_mod[pos];
     }
 
     // Black Bishops
     u8 num_b_bishops = 0;
     while (bitboard_black[BISHOP]) {
         Pos pos = pop_pos(bitboard_black[BISHOP]);
-        black_score += BISHOP_VALUE + b_bishop_square_mod[pos];
+        black_score += BISHOP_VALUE_OLD + b_bishop_square_mod[pos];
         num_b_bishops++;
     }
     if (num_b_bishops >= 2)
