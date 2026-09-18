@@ -70,7 +70,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
 
     // Check extensions can exceed the iteration depth. Stop before indexing
     // killers[ply] or recursing beyond the supported mate-distance range.
-    if (ply >= MAX_PLY) return eval_game_old(game);
+    if (ply >= MAX_PLY) return eval_game(game);
 
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
@@ -184,7 +184,7 @@ i32 SearcherOld::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_
 
     // Check extensions can exceed the iteration depth. Stop before indexing
     // killers[ply] or recursing beyond the supported mate-distance range.
-    if (ply >= MAX_PLY) return eval_game_old(game);
+    if (ply >= MAX_PLY) return eval_game(game);
 
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
@@ -403,7 +403,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return 0;
     }
 
-    i32 static_eval = eval_game_old(game);
+    i32 static_eval = eval_game(game);
     if (ply >= MAX_PLY) return static_eval;
 
     MoveList moves;

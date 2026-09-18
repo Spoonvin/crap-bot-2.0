@@ -18,7 +18,7 @@
 namespace {
 
 constexpr unsigned int DEFAULT_MOVE_TIME_MS = 800;
-constexpr unsigned int MIN_SEARCH_TIME_MS = 50;
+constexpr unsigned int MIN_SEARCH_TIME_MS = 200;
 constexpr unsigned int DEFAULT_MOVE_OVERHEAD_MS = 100;
 constexpr unsigned int MAX_MOVE_OVERHEAD_MS = 5000;
 
@@ -261,8 +261,8 @@ void loop() {
     std::getline(input, arguments);
 
     if (command == "uci") {
-      send("id name Chess Parallel\n"
-           "id author Chess Parallel contributors\n"
+      send("id name CrapBot\n"
+           "id author Spoonvin\n"
            "option name Move Overhead type spin default 100 min 0 max 5000\n"
            "option name Threads type spin default 4 min 1 max 128\n"
            "option name Hash type spin default " +

@@ -14,6 +14,8 @@
 
 struct Searcher {
 
+    i32 thread_id = 0;
+
     u8 base_depth;
 
     Move root_move;
@@ -43,6 +45,8 @@ struct Searcher {
     Searcher(u32 search_time);
 
     void set_search_time(u32 search_time);
+
+    void set_thread_id(i32 thread_id);
 
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);

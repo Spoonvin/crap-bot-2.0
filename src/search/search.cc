@@ -53,6 +53,10 @@ void Searcher::set_search_time(u32 search_time) {
     this->search_time = search_time;
 }
 
+void Searcher::set_thread_id(i32 thread_id) {
+    this->thread_id = thread_id;
+}
+
 i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
 
     this->node_count++;
@@ -366,6 +370,12 @@ void Searcher::iterative_deepening(Game& game) {
 
         iter_depth++;
 
+        // Spread out the threads
+        if (thread_id != 0 && iter_depth > 2 &&
+            ((iter_depth + thread_id) & 1)) {
+            ++iter_depth;
+        }
+
     }
 
     // Debug
@@ -529,7 +539,8 @@ Move Searcher::get_best_move_parallel(Game& game) {
     std::vector<std::thread> threads;
 
     for (unsigned int i = 1; i < thread_count; i++) {
-        threads.emplace_back([searcher = *this, game]() mutable {
+        threads.emplace_back([searcher = *this, game, i]() mutable {
+            searcher.set_thread_id(i);
             searcher.iterative_deepening(game);
         });
     }
