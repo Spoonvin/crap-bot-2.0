@@ -17,11 +17,14 @@ struct Searcher {
     u8 base_depth;
 
     Move root_move;
+    
+    i32 prev_eval = 0;
 
     u32 search_time;
-    std::chrono::steady_clock::time_point deadline;
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::time_point::max();
 
-    bool stop_search;
+    bool stop_search = false;
     // Shared by all workers; reset by the caller before starting a new search.
     std::shared_ptr<std::atomic<bool>> cancel =
         std::make_shared<std::atomic<bool>>(false);
@@ -45,6 +48,7 @@ struct Searcher {
     Move get_best_move_parallel(Game& game);
 
     i32 alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null);
+    i32 pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null);
 
     private:
 

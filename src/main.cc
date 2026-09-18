@@ -89,10 +89,13 @@ void benchmark(i32 argc, char** argv) {
 // Prints legal moves and best move
 void test_fen(i32 argc, char** argv) {
 
+
   const char* fen = argv[2];
   u32 time_limit = (u32)std::stoi(argv[3]);
 
   std::cout << "Testing FEN: " << fen << " with time limit: " << time_limit << "ms\n";
+
+  Searcher test_searcher(time_limit);
 
   Game game;
   game = Game::from_fen(fen);
@@ -111,14 +114,14 @@ void test_fen(i32 argc, char** argv) {
     std::cout << mv << "\n";
   }
 
-  Bot* bot= new Bot((u32)time_limit);
-
-  Move move = bot->select_best(game);
+  Move best_move = test_searcher.get_best_move_parallel(game);
+  i32 eval = test_searcher.prev_eval;
 
   char buffer[6];
-  move.store_alg(buffer);
+  best_move.store_alg(buffer);
 
   std::cout << "Best move: " << buffer << "\n";
+  std::cout << "Eval: " << eval << "\n";
 
 }
 

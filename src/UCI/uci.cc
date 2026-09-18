@@ -151,7 +151,7 @@ unsigned int time_for_go(const std::string& arguments, Color turn,
   unsigned int move_time = 0;
   unsigned int clock_time = 0;
   unsigned int increment = 0;
-  unsigned int moves_to_go = 30;
+  unsigned int moves_to_go = 25;
   bool infinite = false;
   bool has_move_time = false;
   bool has_clock_time = false;
