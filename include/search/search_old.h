@@ -8,10 +8,11 @@
 
 #include <chrono>
 #include <atomic>
+#include <memory>
 
 #define MAX_PLY 80
 
-struct SearcherOld{
+struct SearcherOld {
 
     u8 base_depth;
 
@@ -21,8 +22,12 @@ struct SearcherOld{
     std::chrono::steady_clock::time_point deadline;
 
     bool stop_search;
+    // Shared by all workers; reset by the caller before starting a new search.
+    std::shared_ptr<std::atomic<bool>> cancel =
+        std::make_shared<std::atomic<bool>>(false);
+    unsigned int thread_count = 4;
 
-    TransTable* trans_table;
+    std::shared_ptr<TransTable> trans_table;
     OpeningBook book;
 
     Move killers[MAX_PLY];
@@ -34,12 +39,16 @@ struct SearcherOld{
     SearcherOld(u8 depth);
     SearcherOld(u32 search_time);
 
+    void set_search_time(u32 search_time);
+
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);
 
     i32 alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null);
 
     private:
+
+    void iterative_deepening(Game& game);
 
     i32 quiescence(i32 alpha, i32 beta, u8 ply, Game& game);
 
@@ -48,7 +57,7 @@ struct SearcherOld{
     // Returns true if we are past deadline
     bool check_deadline();
 
-    i32 probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta);
-    void record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type);
+    i32 probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta, u8 ply);
+    void record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type, u8 ply);
 
 };

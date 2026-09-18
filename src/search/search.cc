@@ -20,6 +20,8 @@ struct MoveMvvLvaScore{
     i32 score;
 };
 
+namespace {
+
 constexpr i32 MATE_SCORE_THRESHOLD = MATE_VALUE - MAX_PLY;
 
 i32 score_to_tt(i32 score, u8 ply) {
@@ -32,6 +34,8 @@ i32 score_from_tt(i32 score, u8 ply) {
     if (score >= MATE_SCORE_THRESHOLD) return score - ply;
     if (score <= -MATE_SCORE_THRESHOLD) return score + ply;
     return score;
+}
+
 }
 
 

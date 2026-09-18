@@ -20,17 +20,39 @@ struct MoveMvvLvaScore{
     i32 score;
 };
 
-SearcherOld::SearcherOld(u8 depth) : book(BOOK_PATH) {
+namespace {
 
-    base_depth = depth;
-    stop_search = false;
+constexpr i32 MATE_SCORE_THRESHOLD = MATE_VALUE - MAX_PLY;
+
+i32 score_to_tt(i32 score, u8 ply) {
+    if (score >= MATE_SCORE_THRESHOLD) return score + ply;
+    if (score <= -MATE_SCORE_THRESHOLD) return score - ply;
+    return score;
 }
 
-SearcherOld::SearcherOld(u32 search_time) : book(BOOK_PATH) {
-    this->search_time = search_time;
-    stop_search = false;
+i32 score_from_tt(i32 score, u8 ply) {
+    if (score >= MATE_SCORE_THRESHOLD) return score - ply;
+    if (score <= -MATE_SCORE_THRESHOLD) return score + ply;
+    return score;
+}
 
-    this->trans_table = new TransTable();
+}
+
+
+
+
+SearcherOld::SearcherOld(u8 depth)
+    : base_depth(depth), root_move(Move::null()), search_time(0),
+      stop_search(false), trans_table(std::make_shared<TransTable>()),
+      book(BOOK_PATH), killers{}, node_count(0) {}
+
+SearcherOld::SearcherOld(u32 search_time)
+    : base_depth(0), root_move(Move::null()), search_time(search_time),
+      stop_search(false), trans_table(std::make_shared<TransTable>()),
+      book(BOOK_PATH), killers{}, node_count(0) {}
+
+void SearcherOld::set_search_time(u32 search_time) {
+    this->search_time = search_time;
 }
 
 i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_null) {
@@ -40,7 +62,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
     if (stop_search) return 0;
 
     // Check deadline only for some plys (for performance)
-    if ((ply & 0b111) == 0b100) {
+    if (ply == 0 || (ply & 0b111) == 0b100) {
         if (check_deadline()) return 0;
     }
 
@@ -48,12 +70,14 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         return 0;
     }
 
-    // Transposition table lookup
-    i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta);
-    if (tt_val != UNKNOWN_TT_VALUE) {
-        if (ply == 0)
-            this->root_move = trans_table->get_pv_move(game.hash);
-        return tt_val;
+    // Check extensions can exceed the iteration depth. Stop before indexing
+    // killers[ply] or recursing beyond the supported mate-distance range.
+    if (ply >= MAX_PLY) return eval_game_old(game);
+
+    if (ply > 0) {
+        i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
+        if (tt_val != UNKNOWN_TT_VALUE)
+            return tt_val;
     }
 
     if (depth <= 0) return quiescence(alpha, beta, ply, game);
@@ -74,6 +98,9 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         }
     }
 
+    // Probes use the requested depth, before this node's check extension.
+    // Store the same depth so this result cannot satisfy a deeper request.
+    const u8 tt_depth = depth;
     if (gen_result.check != NO_CHECK)
         depth++;
     
@@ -94,7 +121,8 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
 		}
     }
 
-    Move pv_move = this->trans_table->get_pv_move(game.hash);
+    Move pv_move = (ply == 0 && !root_move.is_null())
+        ? root_move : trans_table->get_pv_move(game.hash);
     mvv_lva_reordering(moves, pv_move, gen_result.count, game, ply);
 
     for (u8 i = 0; i < gen_result.count; ++i) {
@@ -111,17 +139,19 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
             best_val = branch_val;
             best_move = move;
 
-            if (ply == 0)
-                this->root_move = move;
-
             if (branch_val > alpha) {
+                // Only an alpha improvement can replace the saved root move;
+                // fail-low results may be upper bounds, not comparable scores.
+                if (ply == 0)
+                    this->root_move = move;
+
                 tt_type = EXACT;
                 alpha = branch_val;
             }
         }
 
         if(branch_val >= beta) {
-            record_trans_table(game.hash, depth, best_move, beta, LOWER);
+            record_trans_table(game.hash, tt_depth, best_move, beta, LOWER, ply);
 
             // Homemode killer heuristic
             // If move was searched late and caused cutoff ->
@@ -134,34 +164,36 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
         }
     }
 
-    record_trans_table(game.hash, depth, best_move, alpha, tt_type);
+    record_trans_table(game.hash, tt_depth, best_move, alpha, tt_type, ply);
 
     return alpha;
 }
 
 bool SearcherOld::check_deadline() {
 
-    if (std::chrono::steady_clock::now() < deadline) return false;
+    if (!cancel->load(std::memory_order_relaxed) &&
+        std::chrono::steady_clock::now() < deadline) return false;
 
     stop_search = true;
     return true;
 }
 
-Move SearcherOld::get_best_move(Game& game) {
+void SearcherOld::iterative_deepening(Game& game) {
 
-    Move book_move = this->book.lookup_position(game);
-    if (!book_move.is_null())
-        return book_move;
-    
-    this->root_move = Move::null();
-    stop_search = false;
-    deadline = std::chrono::steady_clock::now()
-         + std::chrono::milliseconds(search_time);
+    // Always have a legal fallback, even if the first iteration is interrupted.
+    MoveList moves;
+    GenResult generated = gen_legal(game, moves);
+    root_move = generated.count > 0 ? moves[0] : Move::null();
+    if (generated.count == 0 || game.is_draw())
+        return;
 
     u8 iter_depth = 1;
     i32 prev_score = 0;
 
-    while (std::chrono::steady_clock::now() < deadline) {
+    while (!stop_search && iter_depth < MAX_PLY &&
+           std::chrono::steady_clock::now() < deadline) {
+
+        const Move completed_move = root_move;
 
         i32 window = 25;
         i32 alpha = MIN_VALUE;
@@ -175,6 +207,9 @@ Move SearcherOld::get_best_move(Game& game) {
         i32 score = 0;
 
         while (true) {
+            // Every aspiration attempt starts with the last completed PV.
+            // If stopped, retain it unless this attempt found an improvement.
+            root_move = completed_move;
             score = alpha_beta(alpha, beta, iter_depth, 0, game, true);
 
             if (this->stop_search)
@@ -190,45 +225,61 @@ Move SearcherOld::get_best_move(Game& game) {
             
         }
 
+        if (stop_search)
+            break;
+
         prev_score = score;
 
         iter_depth++;
 
     }
+}
+
+Move SearcherOld::get_best_move(Game& game) {
+
+    Move book_move = this->book.lookup_position(game);
+    if (!book_move.is_null())
+        return book_move;
+
+    stop_search = false;
+    deadline = std::chrono::steady_clock::now()
+         + std::chrono::milliseconds(search_time);
+
+    iterative_deepening(game);
 
     this->trans_table->age++;
 
+    //std::cout << "Node searched: " << node_count << "\n";
     this->node_count = 0;
 
-    Move final_move = this->root_move;
-    assert(!final_move.is_null());
-
-    return final_move;
+    return root_move;
 }
-
 
 i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
     this->node_count++;
+
+    if (stop_search) return 0;
+    if ((ply & 0b111) == 0b100 && check_deadline()) return 0;
 
     if (game.is_draw()) {
         return 0;
     }
 
     i32 static_eval = eval_game_old(game);
-    i32 best_val = static_eval;
-
-    if (ply > MAX_PLY) return static_eval;
-
-    if (best_val >= beta){
-        return beta;
-    }
-    if (best_val > alpha){
-        alpha = best_val;
-    }
+    if (ply >= MAX_PLY) return static_eval;
 
     MoveList moves;
     GenResult gen_result = gen_non_quiet(game, moves);
+
+    // In check, a legal evasion is mandatory. Standing pat must neither
+    // cause a cutoff nor compete with the scores of the evasions.
+    i32 best_val = MIN_VALUE;
+    if (gen_result.check == NO_CHECK) {
+        best_val = static_eval;
+        if (best_val >= beta) return beta;
+        if (best_val > alpha) alpha = best_val;
+    }
 
     if (gen_result.count <= 0) {
         if (gen_result.check == NO_CHECK) {
@@ -245,6 +296,9 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
 
         i32 branch_val = -quiescence(-beta, -alpha, ply+1, game);
         game.unmake_move(move);
+
+        if (stop_search)
+            return 0;
 
         if (branch_val >= beta) {
             return branch_val;
@@ -267,7 +321,7 @@ void SearcherOld::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, G
         Move move = moves[i];
         i32 move_score = (move.data == pv_move.data) ? 
             MAX_VALUE : mvv_lva_score(move, game);
-
+        
         if (killers[ply].data == move.data)
             move_score += KILLER_BONUS;
 
@@ -290,16 +344,16 @@ void SearcherOld::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, G
     }
 }
 
-i32 SearcherOld::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
+i32 SearcherOld::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta, u8 ply) {
 
-    TTEntry entry = trans_table->get(hash);
+    const TTEntry entry = trans_table->get(hash);
 
     if (entry.is_valid()) {
 
         if (entry.get_depth() >= depth) {
 
             TTType type = entry.get_type();
-            i32 score = entry.get_score();
+            i32 score = score_from_tt(entry.get_score(), ply);
 
             if (type == EXACT)
 
@@ -320,28 +374,16 @@ i32 SearcherOld::probe_trans_table(u64 hash, u8 depth, i32 alpha, i32 beta) {
     return UNKNOWN_TT_VALUE;
 }
 
-void SearcherOld::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type) {
-    TTEntry entry = TTEntry(hash, move, depth, score, type);
+void SearcherOld::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTType type, u8 ply) {
+    TTEntry entry = TTEntry(hash, move, depth, score_to_tt(score, ply), type);
     trans_table->put(entry, hash);
 }
 
-void thread_search(SearcherOld* searcher, Game game) {
-
-    u8 iter_depth = 1;
-
-    while (std::chrono::steady_clock::now() < searcher->deadline) {
-
-        searcher->alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
-
-        iter_depth++;
-    }
-
-    std::cout << "Depth: " << (int)iter_depth - 1 << "\n";
-
-    return;
-}
-
 Move SearcherOld::get_best_move_parallel(Game& game) {
+
+    Move book_move = this->book.lookup_position(game);
+    if (!book_move.is_null())
+        return book_move;
 
     stop_search = false;
     deadline = std::chrono::steady_clock::now()
@@ -349,26 +391,23 @@ Move SearcherOld::get_best_move_parallel(Game& game) {
 
     std::vector<std::thread> threads;
 
-    for (int i = 0; i < 3; i++) {
-        threads.emplace_back(thread_search, this, game);
+    for (unsigned int i = 1; i < thread_count; i++) {
+        threads.emplace_back([searcherOld = *this, game]() mutable {
+            searcherOld.iterative_deepening(game);
+        });
     }
 
-    u8 iter_depth = 1;
-
-    while (std::chrono::steady_clock::now() < this->deadline) {
-
-        alpha_beta(MIN_VALUE, MAX_VALUE, iter_depth, 0, game, true);
-
-        iter_depth++;
-    }
+    iterative_deepening(game);
 
     for (auto& t : threads) {
         t.join();
     }
 
+    // The generation is shared but non-atomic; all TT users have now stopped.
     this->trans_table->age++;
 
-    //std::cout << "Valid ratio: " << this->trans_table.valid_ratio() << "\n";
+    //std::cout << "Node searched: " << node_count << "\n";
+    this->node_count = 0;
 
-    return this->trans_table->get_pv_move(game.hash);
+    return root_move;
 }

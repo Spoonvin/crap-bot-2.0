@@ -1,4 +1,5 @@
 #include "search/search.h"
+#include "search/evaluation.h"
 #include "search/zobrist_hash.h"
 
 #include <algorithm>
@@ -51,6 +52,18 @@ std::string fen(Game& game) {
     char buffer[MAX_FEN];
     game.store_fen(buffer);
     return buffer;
+}
+
+void test_endgame_evaluation() {
+    Game initial = Game::initial();
+    require(endgame_ratio(initial) == 0.0f && eval_game(initial) == 0,
+            "starting material must use the opening king table");
+    Game kings = Game::from_fen("6k1/8/8/8/8/8/8/6K1 w - - 0 1");
+    require(endgame_ratio(kings) == 1.0f, "bare kings must use the endgame table");
+    Game promoted = Game::from_fen(
+        "rnbqkbnr/1ppppppp/8/8/8/Q7/1PPPPPPP/RNBQKBNR w KQkq - 0 1");
+    require(endgame_ratio(promoted) == 0.0f,
+            "extra promoted material must not make the ratio negative");
 }
 
 void play_moves(Game& game, std::initializer_list<const char*> notations) {
@@ -562,6 +575,7 @@ __wrap__ZNSt6chrono3_V212steady_clock3nowEv() {
 
 int main() {
     init_hash_key_map();
+    test_endgame_evaluation();
     test_threefold_repetition();
     test_repetition_null_boundary();
     Searcher searcher(u32{0});

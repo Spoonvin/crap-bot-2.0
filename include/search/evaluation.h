@@ -19,6 +19,9 @@
 i32 eval_game(Game& game);
 i32 eval_game_old(Game& game);
 
+// Start = 0, king n pawns = 1, [0,1].
+f32 endgame_ratio(const Game& game);
+
 i32 square_value(Square square);
 
 i32 mvv_lva_score(Move move, Game& game);

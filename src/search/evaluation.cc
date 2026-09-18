@@ -2,6 +2,8 @@
 #include "chess/game.h"
 #include "chess/board/mask_operations.h"
 
+#include <algorithm>
+
 #define DOUBLE_PAWN_PENALTY 15
 #define ISOLATED_PAWN_PENALTY 15
 
@@ -262,7 +264,23 @@ i32 eval_game_old(Game& game) {
     return result;
 }
 
+f32 endgame_ratio(const Game& game) {
+    // Knights/bishops: 1, rooks: 2, queens: 4. Total 24.
+    constexpr i32 starting_phase = 24;
+    i32 phase = 0;
+    for (int color = 0; color < 2; ++color) {
+        const auto& pieces = game.players[color].bb.masks;
+        phase += __builtin_popcountll(pieces[KNIGHT] | pieces[BISHOP]);
+        phase += 2 * __builtin_popcountll(pieces[ROOK]);
+        phase += 4 * __builtin_popcountll(pieces[QUEEN]);
+    }
+
+    return static_cast<f32>(starting_phase - std::min(phase, starting_phase)) /
+           starting_phase;
+}
+
 i32 eval_game(Game& game) {
+    const f32 endgame = endgame_ratio(game);
     Bitboard bitboard_white = game.players[WHITE].bb;
     Bitboard bitboard_black = game.players[BLACK].bb;
 
@@ -339,7 +357,9 @@ i32 eval_game(Game& game) {
     }
 
     Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
-    white_score += b_king_square_mod[king_pos_w];
+    white_score += static_cast<i32>(
+        (1.0f - endgame) * b_king_square_mod[king_pos_w] +
+        endgame * b_king_square_mod_end[king_pos_w]);
 
     // ------------ Black -----------------------
 
@@ -390,7 +410,9 @@ i32 eval_game(Game& game) {
     }
 
     Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);
-    black_score += b_king_square_mod[king_pos_b];
+    black_score += static_cast<i32>(
+        (1.0f - endgame) * b_king_square_mod[king_pos_b] +
+        endgame * b_king_square_mod_end[king_pos_b]);
 
     i32 result = (game.turn == WHITE) ? white_score - black_score : black_score - white_score;
 
