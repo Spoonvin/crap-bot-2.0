@@ -14,16 +14,19 @@
 
 struct SearcherOld {
 
+    i32 thread_id = 0;
+
     u8 base_depth;
 
     Move root_move;
-
+    
     i32 prev_eval = 0;
 
     u32 search_time;
-    std::chrono::steady_clock::time_point deadline;
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::time_point::max();
 
-    bool stop_search;
+    bool stop_search = false;
     // Shared by all workers; reset by the caller before starting a new search.
     std::shared_ptr<std::atomic<bool>> cancel =
         std::make_shared<std::atomic<bool>>(false);
@@ -32,7 +35,8 @@ struct SearcherOld {
     std::shared_ptr<TransTable> trans_table;
     OpeningBook book;
 
-    Move killers[MAX_PLY];
+    // The two most recent quiet cutoffs at each ply, newest first.
+    Move killers[MAX_PLY][2];
 
     i32 node_count;
 
@@ -42,6 +46,8 @@ struct SearcherOld {
     SearcherOld(u32 search_time);
 
     void set_search_time(u32 search_time);
+
+    void set_thread_id(i32 thread_id);
 
     Move get_best_move(Game& game);
     Move get_best_move_parallel(Game& game);

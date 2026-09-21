@@ -45,7 +45,8 @@ void reset(Searcher& searcher) {
     searcher.stop_search = false;
     searcher.node_count = 0;
     searcher.deadline = std::chrono::steady_clock::now() + std::chrono::hours(1);
-    std::fill(std::begin(searcher.killers), std::end(searcher.killers), Move::null());
+    for (auto& ply_killers : searcher.killers)
+        std::fill(std::begin(ply_killers), std::end(ply_killers), Move::null());
 }
 
 std::string fen(Game& game) {

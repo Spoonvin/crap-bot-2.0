@@ -11,5 +11,6 @@ struct BotOld : Model {
   BotOld(u32 time_lim);
   
   Move select_best(Game& game) override;
+  void clear_transposition_table() override;
 
 };

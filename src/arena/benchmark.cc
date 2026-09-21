@@ -25,6 +25,9 @@ BenchmarkStats Benchmark::run_benchmark(Game& game, u32 iters) {
         Arena arena(iter_game, white_player, black_player);
         ArenaResult result = arena.play();
 
+        m1->clear_transposition_table();
+        m2->clear_transposition_table();
+
         switch (result) {
             case WHITE_WIN:
                 if (m1_white) {

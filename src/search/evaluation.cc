@@ -448,7 +448,47 @@ i32 square_value(Square square) {
     return 0;
 }
 
-i32 mvv_lva_score(Move move, Game& game) {
+bool is_quiet(Move move, Game& game) {
+    return move.type() != PROMOTION
+        && move.type() != EN_PASSANT
+        && game.board[move.to()] == EMPTY_SQUARE;
+}
+
+i32 calc_move_score(Move move, Game& game) {
+    Pos from = move.from();
+    Pos to = move.to();
+    Square attacker = game.board[from];
+    Square victim = game.board[to];
+    i32 a_val = square_value(attacker);
+    i32 v_val = square_value(victim);
+
+    i32 promo_bonus = 0;
+    if (move.type() == PROMOTION) {
+        switch (move.promo_piece()) {
+            case KNIGHT:
+            case BISHOP:
+                promo_bonus = 300;
+                break;
+            case ROOK:
+                promo_bonus = 500;
+                break;
+            case QUEEN:
+                promo_bonus = 900;
+                break;
+            default:
+                break;
+        }
+    } else if (move.type() == EN_PASSANT) {
+        v_val = PAWN_VALUE;
+    }
+
+    if (v_val == 0)
+        a_val = 0;
+
+    return v_val - (a_val / 100) + promo_bonus;
+}
+
+i32 calc_move_score_old(Move move, Game& game) {
     Pos from = move.from();
     Pos to = move.to();
     Square attacker = game.board[from];

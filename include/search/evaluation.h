@@ -26,6 +26,11 @@ f32 endgame_ratio(const Game& game);
 
 i32 square_value(Square square);
 
-i32 mvv_lva_score(Move move, Game& game);
+// Check the position before making the move; excludes captures and promotions.
+bool is_quiet(Move move, Game& game);
+
+i32 calc_move_score(Move move, Game& game);
+i32 calc_move_score_old(Move move, Game& game);
+
 
 i32 eval_pawn_structure(Mask acting_pawns, Mask opponent_pawns, Color acting_color);

@@ -18,7 +18,7 @@
 namespace {
 
 constexpr unsigned int DEFAULT_MOVE_TIME_MS = 800;
-constexpr unsigned int MIN_SEARCH_TIME_MS = 200;
+constexpr unsigned int MIN_SEARCH_TIME_MS = 300;
 constexpr unsigned int DEFAULT_MOVE_OVERHEAD_MS = 100;
 constexpr unsigned int MAX_MOVE_OVERHEAD_MS = 5000;
 
@@ -151,7 +151,7 @@ unsigned int time_for_go(const std::string& arguments, Color turn,
   unsigned int move_time = 0;
   unsigned int clock_time = 0;
   unsigned int increment = 0;
-  unsigned int moves_to_go = 25;
+  unsigned int moves_to_go = 30;
   bool infinite = false;
   bool has_move_time = false;
   bool has_clock_time = false;
@@ -278,7 +278,8 @@ void loop() {
       game = Game::initial();
       searcher.trans_table->init();
       searcher.trans_table->age = 0;
-      std::fill(std::begin(searcher.killers), std::end(searcher.killers), Move::null());
+      for (auto& ply_killers : searcher.killers)
+        std::fill(std::begin(ply_killers), std::end(ply_killers), Move::null());
     } else if (command == "position") {
       stop();
       set_position(&game, arguments);

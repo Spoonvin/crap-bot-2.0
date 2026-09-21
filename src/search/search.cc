@@ -13,7 +13,7 @@
 
 #define BOOK_PATH "/home/edvin/projects/crap-bot-2.0/assets/Book.txt"
 
-#define KILLER_BONUS 300
+#define KILLER_BONUS 50
 
 struct MoveMvvLvaScore{
     Move move;
@@ -155,11 +155,10 @@ i32 Searcher::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool
         if(branch_val >= beta) {
             record_trans_table(game.hash, tt_depth, best_move, beta, LOWER, ply);
 
-            // Homemode killer heuristic
-            // If move was searched late and caused cutoff ->
-            // store and give move order bonus later
-            if (i > (gen_result.count >> 2)) {
-                killers[ply] = move;
+            // Store quiet moves that cause cutoff
+            if (is_quiet(move, game) && killers[ply][0].data != move.data) {
+                killers[ply][1] = killers[ply][0];
+                killers[ply][0] = move;
             }
 
             return beta;
@@ -249,6 +248,7 @@ i32 Searcher::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_nul
 
     for (u8 i = 0; i < gen_result.count; ++i) {
         Move move = moves[i];
+        bool move_is_quiet = is_quiet(move, game);
         game.make_move(move);
 
         i32 branch_val = 0;
@@ -256,13 +256,15 @@ i32 Searcher::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_nul
             // Full search
             branch_val = -pvs(-beta, -alpha, depth-1, ply+1, game, do_null);
         } else {
+
             // We assume the first move is best
             // Search rest with a narrow window
             branch_val = -pvs(-alpha-1, -alpha, depth-1, ply+1, game, do_null);
 
             // If move turns out to be better
             // do a full search
-            if (!stop_search && (branch_val > alpha) && (branch_val < beta)) {
+            if (!stop_search && 
+                (branch_val > alpha) && (branch_val < beta)) {
                 branch_val = -pvs(-beta, -alpha, depth-1, ply+1, game, do_null);
             }
         }
@@ -289,11 +291,10 @@ i32 Searcher::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_nul
         if(branch_val >= beta) {
             record_trans_table(game.hash, tt_depth, best_move, beta, LOWER, ply);
 
-            // Homemode killer heuristic
-            // If move was searched late and caused cutoff ->
-            // store and give move order bonus later
-            if (i > (gen_result.count >> 2)) {
-                killers[ply] = move;
+            // Store quiet moves that cause cutoff
+            if (move_is_quiet && killers[ply][0].data != move.data) {
+                killers[ply][1] = killers[ply][0];
+                killers[ply][0] = move;
             }
 
             return beta;
@@ -467,9 +468,9 @@ void Searcher::mvv_lva_reordering(MoveList& moves, Move pv_move, u8 length, Game
     for (u8 i = 0; i < length; i++) {
         Move move = moves[i];
         i32 move_score = (move.data == pv_move.data) ? 
-            MAX_VALUE : mvv_lva_score(move, game);
+            MAX_VALUE : calc_move_score(move, game);
         
-        if (killers[ply].data == move.data)
+        if (killers[ply][0].data == move.data || killers[ply][1].data == move.data)
             move_score += KILLER_BONUS;
 
         move_scores[i] = {move, move_score};

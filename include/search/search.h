@@ -35,7 +35,8 @@ struct Searcher {
     std::shared_ptr<TransTable> trans_table;
     OpeningBook book;
 
-    Move killers[MAX_PLY];
+    // The two most recent quiet cutoffs at each ply, newest first.
+    Move killers[MAX_PLY][2];
 
     i32 node_count;
 

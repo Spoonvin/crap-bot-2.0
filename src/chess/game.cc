@@ -557,9 +557,8 @@ bool Game::is_insuff() {
 }
 
 bool Game::is_50mr() {
-  // Each player must make 100 moves without a capture or pawn move.
-  // Temporary lowered for benchmarking!
-  return hm_clock >= 50;
+  // 150 for automatic draw?
+  return hm_clock >= 150;
 }
 
 // Return true if either king is dead
