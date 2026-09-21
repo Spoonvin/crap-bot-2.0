@@ -67,6 +67,23 @@ void test_endgame_evaluation() {
             "extra promoted material must not make the ratio negative");
 }
 
+void test_king_safety_evaluation() {
+    Game sheltered = Game::from_fen(
+        "rnbqkbnr/pppppppp/8/8/4P3/5N2/PPPPBPPP/RNBQ1RK1 w kq - 0 4");
+    Game exposed = Game::from_fen(
+        "rnbqkbnr/pppppppp/8/5PPP/4P3/5N2/PPPPB3/RNBQ1RK1 w kq - 0 4");
+    const i32 sheltered_score = eval_game(sheltered);
+    const i32 exposed_score = eval_game(exposed);
+    require(sheltered_score > exposed_score,
+            "eval_game must reward keeping the castled kings pawn shield");
+    exposed.invert();
+    require(eval_game(exposed) == exposed_score,
+            "integrated king safety must preserve symmetry");
+    exposed.turn = Color(!exposed.turn);
+    require(eval_game(exposed) == -exposed_score,
+            "integrated king safety must follow the side-to-move convention");
+}
+
 void play_moves(Game& game, std::initializer_list<const char*> notations) {
     for (const char* notation : notations) {
         MoveList moves;
@@ -577,6 +594,7 @@ __wrap__ZNSt6chrono3_V212steady_clock3nowEv() {
 int main() {
     init_hash_key_map();
     test_endgame_evaluation();
+    test_king_safety_evaluation();
     test_threefold_repetition();
     test_repetition_null_boundary();
     Searcher searcher(u32{0});

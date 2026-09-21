@@ -74,7 +74,7 @@ i32 SearcherOld::alpha_beta(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, b
 
     // Check extensions can exceed the iteration depth. Stop before indexing
     // killers[ply] or recursing beyond the supported mate-distance range.
-    if (ply >= MAX_PLY) return eval_game(game);
+    if (ply >= MAX_PLY) return eval_game_old(game);
 
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
@@ -187,7 +187,7 @@ i32 SearcherOld::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_
 
     // Check extensions can exceed the iteration depth. Stop before indexing
     // killers[ply] or recursing beyond the supported mate-distance range.
-    if (ply >= MAX_PLY) return eval_game(game);
+    if (ply >= MAX_PLY) return eval_game_old(game);
 
     if (ply > 0) {
         i32 tt_val = probe_trans_table(game.hash, depth, alpha, beta, ply);
@@ -257,13 +257,29 @@ i32 SearcherOld::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_
             branch_val = -pvs(-beta, -alpha, depth-1, ply+1, game, do_null);
         } else {
 
-            // We assume the first move is best
-            // Search rest with a narrow window
-            branch_val = -pvs(-alpha-1, -alpha, depth-1, ply+1, game, do_null);
+            bool need_to_redo_search = true;
+
+            if (depth >= 3 &&
+                i >= 4 &&
+                gen_result.check == NO_CHECK &&
+                move_is_quiet &&
+                killers[ply][0].data != move.data && 
+                killers[ply][1].data != move.data) {
+
+                i32 reduction = 2 + depth/6;
+                branch_val = -pvs(-alpha-1, -alpha, depth-reduction, ply+1, game, do_null);
+                need_to_redo_search = branch_val > alpha;
+            }
+
+            if (!stop_search && need_to_redo_search) {
+                // We assume the first move is best
+                // Search rest with a narrow window
+                branch_val = -pvs(-alpha-1, -alpha, depth-1, ply+1, game, do_null);
+            }
 
             // If move turns out to be better
             // do a full search
-            if (!stop_search && 
+            if (!stop_search &&
                 (branch_val > alpha) && (branch_val < beta)) {
                 branch_val = -pvs(-beta, -alpha, depth-1, ply+1, game, do_null);
             }
@@ -414,7 +430,7 @@ i32 SearcherOld::quiescence(i32 alpha, i32 beta, u8 ply, Game& game) {
         return 0;
     }
 
-    i32 static_eval = eval_game(game);
+    i32 static_eval = eval_game_old(game);
     if (ply >= MAX_PLY) return static_eval;
 
     MoveList moves;

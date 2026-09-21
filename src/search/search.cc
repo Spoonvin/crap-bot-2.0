@@ -257,13 +257,29 @@ i32 Searcher::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_nul
             branch_val = -pvs(-beta, -alpha, depth-1, ply+1, game, do_null);
         } else {
 
-            // We assume the first move is best
-            // Search rest with a narrow window
-            branch_val = -pvs(-alpha-1, -alpha, depth-1, ply+1, game, do_null);
+            bool need_to_redo_search = true;
+
+            if (depth >= 3 &&
+                i >= 4 &&
+                gen_result.check == NO_CHECK &&
+                move_is_quiet &&
+                killers[ply][0].data != move.data && 
+                killers[ply][1].data != move.data) {
+
+                i32 reduction = 2 + depth/6;
+                branch_val = -pvs(-alpha-1, -alpha, depth-reduction, ply+1, game, do_null);
+                need_to_redo_search = branch_val > alpha;
+            }
+
+            if (!stop_search && need_to_redo_search) {
+                // We assume the first move is best
+                // Search rest with a narrow window
+                branch_val = -pvs(-alpha-1, -alpha, depth-1, ply+1, game, do_null);
+            }
 
             // If move turns out to be better
             // do a full search
-            if (!stop_search && 
+            if (!stop_search &&
                 (branch_val > alpha) && (branch_val < beta)) {
                 branch_val = -pvs(-beta, -alpha, depth-1, ply+1, game, do_null);
             }

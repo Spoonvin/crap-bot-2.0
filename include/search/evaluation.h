@@ -34,3 +34,7 @@ i32 calc_move_score_old(Move move, Game& game);
 
 
 i32 eval_pawn_structure(Mask acting_pawns, Mask opponent_pawns, Color acting_color);
+
+// Pawn shelter and open approaches, in middlegame centipawns for acting_color.
+// king_pos uses board coordinates; eval_game applies the phase weight.
+i32 eval_king_safety(const Player players[2], Pos king_pos, Color acting_color);

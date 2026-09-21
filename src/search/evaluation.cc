@@ -4,17 +4,25 @@
 
 #include <algorithm>
 
-#define DOUBLE_PAWN_PENALTY 15
-#define ISOLATED_PAWN_PENALTY 15
+constexpr i32 DOUBLE_PAWN_PENALTY = 15;
+constexpr i32 ISOLATED_PAWN_PENALTY = 15;
 
-#define QUEEN_OPEN_FILE_BONUS 10
-#define QUEEN_SEMI_OPEN_FILE_BONUS 5
-#define ROOK_OPEN_FILE_BONUS 15
-#define ROOK_SEMI_OPEN_FILE_BONUS 8
+constexpr i32 QUEEN_OPEN_FILE_BONUS = 10;
+constexpr i32 QUEEN_SEMI_OPEN_FILE_BONUS = 5;
+constexpr i32 ROOK_OPEN_FILE_BONUS = 15;
+constexpr i32 ROOK_SEMI_OPEN_FILE_BONUS = 8;
 
-#define BISHOP_PAIR_BONUS 30
+constexpr i32 BISHOP_PAIR_BONUS = 30;
+constexpr i32 ROOK_ON_SEVENTH_BONUS = 20;
 
-#define ROOK_ON_SEVENTH_BONUS 20
+// Might need tuning
+constexpr i32 KING_SHIELD_NEAR_BONUS = 10;
+constexpr i32 KING_SHIELD_FAR_BONUS = 5;
+constexpr i32 KING_SHIELD_MISSING_PENALTY = 10;
+constexpr i32 KING_OPEN_FILE_PENALTY = 25;
+constexpr i32 KING_SEMI_OPEN_FILE_PENALTY = 15;
+constexpr i32 KING_ADJACENT_OPEN_FILE_PENALTY = 15;
+constexpr i32 KING_ADJACENT_SEMI_OPEN_FILE_PENALTY = 10;
 
 
 Mask WHITE_PASSED_TABLE[64];
@@ -141,20 +149,6 @@ i32 eval_game_old(Game& game) {
     // Pawn structure
     white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
     black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
-
-    /*
-    // Rook on seventh bonus
-    if (bitboard_white[ROOK] & row_mask(6)) {
-        if ((bitboard_black[PAWN] & row_mask(6)) || (bitboard_black[KING] & row_mask(7))) {
-            white_score += ROOK_ON_SEVENTH_BONUS;
-        }
-    }
-
-    if (bitboard_black[ROOK] & row_mask(1)) {
-        if ((bitboard_white[PAWN] & row_mask(1)) || (bitboard_white[KING] & row_mask(0))) {
-            black_score += ROOK_ON_SEVENTH_BONUS;
-        }
-    }*/
 
     // ------------ White ------------
 
@@ -293,19 +287,12 @@ i32 eval_game(Game& game) {
     white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
     black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
 
-    /*
-    // Rook on seventh bonus
-    if (bitboard_white[ROOK] & row_mask(6)) {
-        if ((bitboard_black[PAWN] & row_mask(6)) || (bitboard_black[KING] & row_mask(7))) {
-            white_score += ROOK_ON_SEVENTH_BONUS;
-        }
-    }
-
-    if (bitboard_black[ROOK] & row_mask(1)) {
-        if ((bitboard_white[PAWN] & row_mask(1)) || (bitboard_white[KING] & row_mask(0))) {
-            black_score += ROOK_ON_SEVENTH_BONUS;
-        }
-    }*/
+    // King safety evaluation
+    // Pawn shelter should not discourage king activity in pawn endings.
+    white_score += static_cast<i32>((1.0f - endgame) * eval_king_safety(
+        game.players, __builtin_ctzll(bitboard_white[KING]), WHITE));
+    black_score += static_cast<i32>((1.0f - endgame) * eval_king_safety(
+        game.players, __builtin_ctzll(bitboard_black[KING]), BLACK));
 
     // ------------ White ------------
 
@@ -422,7 +409,7 @@ i32 eval_game(Game& game) {
 i32 square_value(Square square) {
     if (square == EMPTY_SQUARE) return 0;
 
-    Piece piece = stp(square);
+    const Piece piece = stp(square);
 
     switch(piece) {
         case PAWN:
@@ -455,10 +442,10 @@ bool is_quiet(Move move, Game& game) {
 }
 
 i32 calc_move_score(Move move, Game& game) {
-    Pos from = move.from();
-    Pos to = move.to();
-    Square attacker = game.board[from];
-    Square victim = game.board[to];
+    const Pos from = move.from();
+    const Pos to = move.to();
+    const Square attacker = game.board[from];
+    const Square victim = game.board[to];
     i32 a_val = square_value(attacker);
     i32 v_val = square_value(victim);
 
@@ -489,10 +476,10 @@ i32 calc_move_score(Move move, Game& game) {
 }
 
 i32 calc_move_score_old(Move move, Game& game) {
-    Pos from = move.from();
-    Pos to = move.to();
-    Square attacker = game.board[from];
-    Square victim = game.board[to];
+    const Pos from = move.from();
+    const Pos to = move.to();
+    const Square attacker = game.board[from];
+    const Square victim = game.board[to];
     i32 a_val = square_value(attacker);
     i32 v_val = square_value(victim);
 
@@ -545,4 +532,47 @@ i32 eval_pawn_structure(Mask acting_pawns, Mask opponent_pawns, Color acting_col
     }
 
     return total_score;
+}
+
+i32 eval_king_safety(const Player players[2], Pos king_pos, Color acting_color) {
+    const i32 direction = (acting_color == WHITE) ? 8 : -8;
+    const i32 king_col = king_pos % 8;
+    const i32 front_row_start = king_pos - king_col + direction;
+
+    const Mask own_pawns = players[acting_color].bb.masks[PAWN];
+    const Mask enemy_pawns = players[!acting_color].bb.masks[PAWN];
+    const Mask forward = (acting_color == WHITE)
+        ? WHITE_PASSED_TABLE[king_pos] : BLACK_PASSED_TABLE[king_pos];
+
+    i32 score = 0;
+    const i32 start = (king_col <= 0) ? 0 : king_col - 1;
+    const i32 end = (king_col >= 7) ? 7 : king_col + 1;
+    for (i32 col = start; col <= end; ++col) {
+        const Mask file = col_mask(col);
+        const i32 front_pos = front_row_start + col;
+        const i32 farther_pos = front_pos + direction;
+
+        // Only one bonus possible per file
+        if (front_pos >= 0 && front_pos < 64 && (own_pawns & pos_mask(front_pos)))
+            score += KING_SHIELD_NEAR_BONUS;
+        else if (farther_pos >= 0 && farther_pos < 64 && (own_pawns & pos_mask(farther_pos)))
+            score += KING_SHIELD_FAR_BONUS;
+        else
+            score -= KING_SHIELD_MISSING_PENALTY;
+
+        // Give open and semi-open file penalties
+        // Extra penalty if king is on open file
+        const Mask approach = forward & file;
+        if (!(own_pawns & approach)) {
+            const bool king_file = col == king_col;
+            if (!(enemy_pawns & approach))
+                score -= king_file ? KING_OPEN_FILE_PENALTY
+                                   : KING_ADJACENT_OPEN_FILE_PENALTY;
+            else
+                score -= king_file ? KING_SEMI_OPEN_FILE_PENALTY
+                                   : KING_ADJACENT_SEMI_OPEN_FILE_PENALTY;
+        }
+    }
+
+    return score;
 }
