@@ -138,6 +138,7 @@ Pos invert_pos(Pos pos) {
 }
 
 i32 eval_game_old(Game& game) {
+    const f32 endgame = endgame_ratio(game);
     Bitboard bitboard_white = game.players[WHITE].bb;
     Bitboard bitboard_black = game.players[BLACK].bb;
 
@@ -147,22 +148,29 @@ i32 eval_game_old(Game& game) {
     i32 black_score = 0;
 
     // Pawn structure
-    white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
-    black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+    white_score += eval_pawn_structure_old(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
+    black_score += eval_pawn_structure_old(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+
+    // King safety evaluation
+    // Pawn shelter should not discourage king activity in pawn endings.
+    white_score += static_cast<i32>((1.0f - endgame) * eval_king_safety(
+        game.players, __builtin_ctzll(bitboard_white[KING]), WHITE));
+    black_score += static_cast<i32>((1.0f - endgame) * eval_king_safety(
+        game.players, __builtin_ctzll(bitboard_black[KING]), BLACK));
 
     // ------------ White ------------
 
     // White Knights
     while (bitboard_white[KNIGHT]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[KNIGHT]));
-        white_score += KNIGHT_VALUE_OLD + b_knight_square_mod[pos];
+        white_score += KNIGHT_VALUE + b_knight_square_mod[pos];
     }
 
     // White Bishops
     u8 num_w_bishops = 0;
     while (bitboard_white[BISHOP]) {
         Pos pos = invert_pos(pop_pos(bitboard_white[BISHOP]));
-        white_score += BISHOP_VALUE_OLD + b_bishop_square_mod[pos];
+        white_score += BISHOP_VALUE + b_bishop_square_mod[pos];
         num_w_bishops++;
     }
     if (num_w_bishops >= 2) {
@@ -200,21 +208,23 @@ i32 eval_game_old(Game& game) {
     }
 
     Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
-    white_score += b_king_square_mod[king_pos_w];
+    white_score += static_cast<i32>(
+        (1.0f - endgame) * b_king_square_mod[king_pos_w] +
+        endgame * b_king_square_mod_end[king_pos_w]);
 
     // ------------ Black -----------------------
 
     // Black Knights
     while (bitboard_black[KNIGHT]) {
         Pos pos = pop_pos(bitboard_black[KNIGHT]);
-        black_score += KNIGHT_VALUE_OLD + b_knight_square_mod[pos];
+        black_score += KNIGHT_VALUE + b_knight_square_mod[pos];
     }
 
     // Black Bishops
     u8 num_b_bishops = 0;
     while (bitboard_black[BISHOP]) {
         Pos pos = pop_pos(bitboard_black[BISHOP]);
-        black_score += BISHOP_VALUE_OLD + b_bishop_square_mod[pos];
+        black_score += BISHOP_VALUE + b_bishop_square_mod[pos];
         num_b_bishops++;
     }
     if (num_b_bishops >= 2)
@@ -251,7 +261,9 @@ i32 eval_game_old(Game& game) {
     }
 
     Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);
-    black_score += b_king_square_mod[king_pos_b];
+    black_score += static_cast<i32>(
+        (1.0f - endgame) * b_king_square_mod[king_pos_b] +
+        endgame * b_king_square_mod_end[king_pos_b]);
 
     i32 result = (game.turn == WHITE) ? white_score - black_score : black_score - white_score;
 
@@ -487,6 +499,63 @@ i32 calc_move_score_old(Move move, Game& game) {
 }
 
 i32 eval_pawn_structure(Mask acting_pawns, Mask opponent_pawns, Color acting_color) {
+
+    i32 total_score = 0;
+
+    for (int col = 0; col < 8; col++) {
+        Mask file = col_mask(col);
+        Mask pawns_on_file = acting_pawns & file;
+
+        if (!pawns_on_file) continue;
+
+        int double_count = __builtin_popcountll(pawns_on_file);
+
+        if (double_count > 1) {
+            total_score -= (double_count - 1) * DOUBLE_PAWN_PENALTY;
+        }
+
+        Mask adjacent = 0;
+        if (col > 0) adjacent |= col_mask(col - 1);
+        if (col < 7) adjacent |= col_mask(col + 1);
+
+        if ((acting_pawns & adjacent) == 0) {
+            int iso_count = __builtin_popcountll(pawns_on_file);
+            total_score -= iso_count * ISOLATED_PAWN_PENALTY;
+        }
+    }
+
+    Mask temp = acting_pawns;
+
+    while (temp) {
+        Pos pos = pop_pos(temp);
+        Mask file = col_mask(pos % 8);
+        Mask pawns_on_file = acting_pawns & file;
+
+        // Find pawn closest to promotion
+        pos = (acting_color == WHITE)
+            ? 63 - __builtin_clzll(pawns_on_file)
+            : __builtin_ctzll(pawns_on_file);
+
+        temp &= ~file;
+
+        Mask passed_mask = (acting_color == WHITE)
+            ? WHITE_PASSED_TABLE[pos]
+            : BLACK_PASSED_TABLE[pos];
+
+        if ((opponent_pawns & passed_mask) == 0) {
+            i8 row = pos / 8;
+
+            // Flip for black so both use 0-7 progression
+            if (acting_color == BLACK) row = 7 - row;
+
+            total_score += PASSED_PAWN_BONUS[row];
+        }
+    }
+
+    return total_score;
+}
+
+i32 eval_pawn_structure_old(Mask acting_pawns, Mask opponent_pawns, Color acting_color) {
 
     i32 total_score = 0;
 
