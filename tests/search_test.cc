@@ -578,6 +578,50 @@ void test_interrupted_aspiration_retry(Searcher& searcher) {
             "an interrupted retry without an improvement must retain the completed iteration");
 }
 
+f64 avg_eval_time_us() {
+    const std::array<const char*, 8> fens = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnb1kbnr/ppp1pppp/8/q7/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 1",
+        "2kr3r/p2n1ppp/B1p2n2/6B1/1b1P4/1PN2P2/2P1N1PP/R2QK2R w KQ - 0 1",
+        "2k4r/p1p2p1p/3b1np1/rn2B1B1/3P1N2/1PN2P2/2P3PP/1R1Q1RK1 w - - 0 1",
+        "2k4r/p1p2p1p/3b2p1/rn1n2B1/3P1N2/1PN2P2/2P3P1/1R3RK1 w - - 0 1",
+        "7r/p1k5/2pb2p1/rn3pB1/2PP4/1P1N1P2/1R4P1/4R1K1 w - - 0 1",
+        "7r/p1k5/2pb2p1/1n3pB1/2PP4/1P1N1PP1/1R3K2/8 w - - 0 1",
+        "7r/p1k5/3b2p1/8/2P2P2/1P3KP1/1R6/8 w - - 0 1"
+    };
+
+    constexpr i32 repetitions = 100000;
+    f64 total_us = 0.0;
+
+    // Prevent the compiler from removing the calls.
+    volatile i32 result = 0;
+
+    for (const char* fen : fens) {
+        Game game = Game::from_fen(fen);
+
+        // Warm up caches/branch predictors.
+        for (i32 i = 0; i < 1000; ++i) {
+            result = eval_game(game);
+        }
+
+        const auto start = std::chrono::steady_clock::now();
+
+        for (i32 i = 0; i < repetitions; ++i) {
+            result = eval_game(game);
+        }
+
+        const auto end = std::chrono::steady_clock::now();
+
+        const f64 elapsed_us =
+            std::chrono::duration<f64, std::micro>(end - start).count();
+
+        const f64 average_us = elapsed_us / repetitions;
+        total_us += average_us;
+    }
+
+    return total_us / fens.size();
+}
+
 } // namespace
 
 extern "C" std::chrono::steady_clock::time_point
@@ -615,4 +659,10 @@ int main() {
     test_zero_time_and_terminal_positions(searcher);
     test_hash_resize(searcher);
     std::cout << "Search regression tests passed\n";
+
+    std::cout << "Running performance tests\n";
+    f64 avg_eval_time = avg_eval_time_us();
+    std::cout << "  Average eval execution time: " << avg_eval_time << "us\n";
+
+
 }

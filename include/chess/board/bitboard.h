@@ -7,5 +7,5 @@ struct Bitboard {
   Mask masks[PIECE_COUNT];
 
   Mask& operator[](Piece piece);
-  Mask occupancy();
+  Mask occupancy() const;
 };

@@ -2,7 +2,7 @@
 
 Mask& Bitboard::operator[](Piece piece) { return masks[piece]; }
 
-Mask Bitboard::occupancy() {
+Mask Bitboard::occupancy() const {
   Mask mask = 0ull;
 
   for (i8 piece = 0; piece < PIECE_COUNT; piece++) {
