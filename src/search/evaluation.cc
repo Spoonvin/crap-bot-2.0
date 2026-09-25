@@ -63,11 +63,6 @@ constexpr i32 safety_table[100] = {
     500, 500, 500, 500, 500, 500, 500, 500, 500, 500
 };
 
-struct MobilityScore {
-    i32 middlegame;
-    i32 endgame;
-};
-
 // Stockfish mobility values, indexed by the number of attacked squares.
 // Each entry is indexed {middlegame, endgame}.
 constexpr i32 KNIGHT_MOBILITY_BONUS[9][2] = {
@@ -128,76 +123,145 @@ void init_passed() {
     }
 }
 
-const i8 b_pawn_square_mod[64] = {
-    0,  0,  0,  0,  0,  0,  0,  0,
-    20, 20, 30, 30, 30, 30, 20, 10,
-    10, 10, 15, 15, 15, 15, 10, 10,
-    5,  5,  10, 10, 10, 10,  5,  0,
-    0,  0,  0,  20, 20,  0,  0,  0,
-    5, -5,  0,  0,  0,  0, 10,  5,
-    5,  0, 10,-20,-20, 10, 10,  0,
-    0,  0,  0,  0,  0,  0,  0,  0};
+// -------- Pesto tables -----------
 
-const i8 b_knight_square_mod[64] = {
-    -50,-40,-30,-30,-30,-30,-40,-50,
-    -40,-20,  0,  0,  0,  0,-20,-40,
-    -30,  0, 10, 15, 15, 10,  0,-30,
-    -30,  5, 15, 20, 20, 15,  5,-30,
-    -30,  0, 15, 20, 20, 15,  0,-30,
-    -30,  5, 10, 15, 15, 10,  5,-30,
-    -40,-20,  0,  5,  5,  0,-20,-40,
-    -50,-40,-30,-30,-30,-30,-40,-50};
-
-const i8 b_bishop_square_mod[64] = {
-    -20,-10,-10,-10,-10,-10,-10,-20,
-    -10,  0,  0,  0,  0,  0,  0,-10,
-    -10,  0,  5, 10, 10,  5,  0,-10,
-    -10,  5,  5, 10, 10,  5,  5,-10,
-    -10,  0, 10, 10, 10, 10,  0,-10,
-    -10, 10, 10, 10, 10, 10, 10,-10,
-    -10,  5,  0,  0,  0,  0,  5,-10,
-    -20,-10,-10,-10,-10,-10,-10,-20};
-
-const i8 b_rook_square_mod[64] = {
-    0,  0,  0,  0,  0,  0,  0,  0,
-    5, 10, 10, 10, 10, 10, 10,  5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    0,  0,  0,  5,  5,  0,  0,  0};
-
-const i8 b_queen_square_mod[64] = {
-    -20,-10,-10, -5, -5,-10,-10,-20,
-    -10,  0,  0,  0,  0,  0,  0,-10,
-    -10,  0,  5,  5,  5,  5,  0,-10,
-    -5,  0,  5,  5,  5,  5,  0, -5,
-     0,  0,  5,  5,  5,  5,  0, -5,
-    -10,  5,  5,  5,  5,  5,  0,-10,
-    -10,  0,  5,  0,  0,  0,  0,-10,
-    -20,-10,-10, -5, -5,-10,-10,-20};
-
-const i8 b_king_square_mod[64] = {
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -20,-30,-30,-40,-40,-30,-30,-20,
-    -10,-20,-20,-20,-20,-20,-20,-10,
-    5 ,  5,  0,-25,-25,  0,  5,  5,
-    0, 30, 10, -15, 0, -15, 30, 20};
-
-const i8 b_king_square_mod_end[64] = {	
-	-50, -10, 0,  0	, 0	, 0,  -10, -50	,
-	-10, 0	, 10, 10, 10, 10, 0,   -10	,
-	0,	 10	, 20, 20, 20, 20, 10,   0	,
-	0,	 10	, 20, 40, 40, 20, 10,	0	,
-	0,	 10	, 20, 40, 40, 20, 10,	0	,
-	0,	 10	, 20, 20, 20, 20, 10,	0	,
-	-10, 0	, 10, 10, 10, 10, 0,    -10	,
-	-50, -10, 0	, 0	, 0	, 0,  -10,	-50	
+constexpr i32 mg_pawn_table[64] = {
+      0,   0,   0,   0,   0,   0,  0,   0,
+     98, 134,  61,  95,  68, 126, 34, -11,
+     -6,   7,  26,  31,  65,  56, 25, -20,
+    -14,  13,   6,  21,  23,  12, 17, -23,
+    -27,  -2,  -5,  12,  17,   6, 10, -25,
+    -26,  -4,  -4, -10,   3,   3, 33, -12,
+    -35,  -1, -20, -23, -15,  24, 38, -22,
+      0,   0,   0,   0,   0,   0,  0,   0,
 };
+
+constexpr i32 eg_pawn_table[64] = {
+      0,   0,   0,   0,   0,   0,   0,   0,
+    178, 173, 158, 134, 147, 132, 165, 187,
+     94, 100,  85,  67,  56,  53,  82,  84,
+     32,  24,  13,   5,  -2,   4,  17,  17,
+     13,   9,  -3,  -7,  -7,  -8,   3,  -1,
+      4,   7,  -6,   1,   0,  -5,  -1,  -8,
+     13,   8,   8,  10,  13,   0,   2,  -7,
+      0,   0,   0,   0,   0,   0,   0,   0,
+};
+
+constexpr i32 mg_knight_table[64] = {
+    -167, -89, -34, -49,  61, -97, -15, -107,
+     -73, -41,  72,  36,  23,  62,   7,  -17,
+     -47,  60,  37,  65,  84, 129,  73,   44,
+      -9,  17,  19,  53,  37,  69,  18,   22,
+     -13,   4,  16,  13,  28,  19,  21,   -8,
+     -23,  -9,  12,  10,  19,  17,  25,  -16,
+     -29, -53, -12,  -3,  -1,  18, -14,  -19,
+    -105, -21, -58, -33, -17, -28, -19,  -23,
+};
+
+constexpr i32 eg_knight_table[64] = {
+    -58, -38, -13, -28, -31, -27, -63, -99,
+    -25,  -8, -25,  -2,  -9, -25, -24, -52,
+    -24, -20,  10,   9,  -1,  -9, -19, -41,
+    -17,   3,  22,  22,  22,  11,   8, -18,
+    -18,  -6,  16,  25,  16,  17,   4, -18,
+    -23,  -3,  -1,  15,  10,  -3, -20, -22,
+    -42, -20, -10,  -5,  -2, -20, -23, -44,
+    -29, -51, -23, -15, -22, -18, -50, -64,
+};
+
+constexpr i32 mg_bishop_table[64] = {
+    -29,   4, -82, -37, -25, -42,   7,  -8,
+    -26,  16, -18, -13,  30,  59,  18, -47,
+    -16,  37,  43,  40,  35,  50,  37,  -2,
+     -4,   5,  19,  50,  37,  37,   7,  -2,
+     -6,  13,  13,  26,  34,  12,  10,   4,
+      0,  15,  15,  15,  14,  27,  18,  10,
+      4,  15,  16,   0,   7,  21,  33,   1,
+    -33,  -3, -14, -21, -13, -12, -39, -21,
+};
+
+constexpr i32 eg_bishop_table[64] = {
+    -14, -21, -11,  -8, -7,  -9, -17, -24,
+     -8,  -4,   7, -12, -3, -13,  -4, -14,
+      2,  -8,   0,  -1, -2,   6,   0,   4,
+     -3,   9,  12,   9, 14,  10,   3,   2,
+     -6,   3,  13,  19,  7,  10,  -3,  -9,
+    -12,  -3,   8,  10, 13,   3,  -7, -15,
+    -14, -18,  -7,  -1,  4,  -9, -15, -27,
+    -23,  -9, -23,  -5, -9, -16,  -5, -17,
+};
+
+constexpr i32 mg_rook_table[64] = {
+     32,  42,  32,  51, 63,  9,  31,  43,
+     27,  32,  58,  62, 80, 67,  26,  44,
+     -5,  19,  26,  36, 17, 45,  61,  16,
+    -24, -11,   7,  26, 24, 35,  -8, -20,
+    -36, -26, -12,  -1,  9, -7,   6, -23,
+    -45, -25, -16, -17,  3,  0,  -5, -33,
+    -44, -16, -20,  -9, -1, 11,  -6, -71,
+    -19, -13,   1,  17, 16,  7, -37, -26,
+};
+
+constexpr i32 eg_rook_table[64] = {
+    13, 10, 18, 15, 12,  12,   8,   5,
+    11, 13, 13, 11, -3,   3,   8,   3,
+     7,  7,  7,  5,  4,  -3,  -5,  -3,
+     4,  3, 13,  1,  2,   1,  -1,   2,
+     3,  5,  8,  4, -5,  -6,  -8, -11,
+    -4,  0, -5, -1, -7, -12,  -8, -16,
+    -6, -6,  0,  2, -9,  -9, -11,  -3,
+    -9,  2,  3, -1, -5, -13,   4, -20,
+};
+
+constexpr i32 mg_queen_table[64] = {
+    -28,   0,  29,  12,  59,  44,  43,  45,
+    -24, -39,  -5,   1, -16,  57,  28,  54,
+    -13, -17,   7,   8,  29,  56,  47,  57,
+    -27, -27, -16, -16,  -1,  17,  -2,   1,
+     -9, -26,  -9, -10,  -2,  -4,   3,  -3,
+    -14,   2, -11,  -2,  -5,   2,  14,   5,
+    -35,  -8,  11,   2,   8,  15,  -3,   1,
+     -1, -18,  -9,  10, -15, -25, -31, -50,
+};
+
+constexpr i32 eg_queen_table[64] = {
+     -9,  22,  22,  27,  27,  19,  10,  20,
+    -17,  20,  32,  41,  58,  25,  30,   0,
+    -20,   6,   9,  49,  47,  35,  19,   9,
+      3,  22,  24,  45,  57,  40,  57,  36,
+    -18,  28,  19,  47,  31,  34,  39,  23,
+    -16, -27,  15,   6,   9,  17,  10,   5,
+    -22, -23, -30, -16, -16, -23, -36, -32,
+    -33, -28, -22, -43,  -5, -32, -20, -41,
+};
+
+constexpr i32 mg_king_table[64] = {
+    -65,  23,  16, -15, -56, -34,   2,  13,
+     29,  -1, -20,  -7,  -8,  -4, -38, -29,
+     -9,  24,   2, -16, -20,   6,  22, -22,
+    -17, -20, -12, -27, -30, -25, -14, -36,
+    -49,  -1, -27, -39, -46, -44, -33, -51,
+    -14, -14, -22, -46, -44, -30, -15, -27,
+      1,   7,  -8, -64, -43, -16,   9,   8,
+    -15,  36,  12, -54,   8, -28,  24,  14,
+};
+
+constexpr i32 eg_king_table[64] = {
+    -74, -35, -18, -18, -11,  15,   4, -17,
+    -12,  17,  14,  17,  17,  38,  23,  11,
+     10,  17,  23,  15,  20,  45,  44,  13,
+     -8,  22,  24,  27,  26,  33,  26,   3,
+    -18,  -4,  21,  24,  27,  23,   9, -11,
+    -19,  -3,  11,  21,  23,  16,   7,  -9,
+    -27, -11,   4,  13,  14,   4,  -5, -17,
+    -53, -34, -21, -11, -28, -14, -24, -43
+};
+
+// PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING
+constexpr i32 mg_piece_value[6] = { 82, 477, 337, 365, 1025,  0};
+constexpr i32 eg_piece_value[6] = { 94, 512, 281, 297, 936,  0};
+
+// ---------- End of pesto -----------------
 
 Pos invert_pos(Pos pos) {
     i8 new_pos = ((pos + 56)) - ((pos / 8) * 16);
@@ -228,175 +292,6 @@ inline Mask calc_king_zone(Pos king_pos) {
 
 i32 eval_game_old(Game& game) {
     const f32 endgame = endgame_ratio(game);
-    Bitboard bitboard_white = game.players[WHITE].bb;
-    Bitboard bitboard_black = game.players[BLACK].bb;
-
-    Mask all_pawns = bitboard_white[PAWN] | bitboard_black[PAWN];
-
-    i32 white_score = 0;
-    i32 black_score = 0;
-
-    // Pawn structure
-    white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
-    black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
-
-    // King positions/mask
-    const Pos kings[2] = {Pos(__builtin_ctzll(bitboard_white[KING])), Pos(__builtin_ctzll(bitboard_black[KING]))};
-    const Mask zones[2] = {calc_king_zone<WHITE>(kings[0]), calc_king_zone<BLACK>(kings[1])};
-
-    const Mask occupancy = bitboard_white.occupancy() | bitboard_black.occupancy();
-
-    // Shield bonus/penalty and attacker counts + weights
-    const i32 shields[2] = {eval_pawn_shield(game.players, kings[0], WHITE), eval_pawn_shield(game.players, kings[1], BLACK)};
-    i32 counts[2] = {};
-    i32 weights[2] = {};
-
-    // ------------ White ------------
-
-    // White Knights
-    while (bitboard_white[KNIGHT]) {
-        Pos board_pos = pop_pos(bitboard_white[KNIGHT]);
-        Mask attack = knight_atk_mask(board_pos);
-        add_king_pressure<KNIGHT>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
-        Pos pos = invert_pos(board_pos);
-        white_score += KNIGHT_VALUE + b_knight_square_mod[pos];
-    }
-
-    // White Bishops
-    u8 num_w_bishops = 0;
-    while (bitboard_white[BISHOP]) {
-        Pos board_pos = pop_pos(bitboard_white[BISHOP]);
-        Mask attack = bishop_atk_mask(occupancy, board_pos);
-        add_king_pressure<BISHOP>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
-        Pos pos = invert_pos(board_pos);
-        white_score += BISHOP_VALUE + b_bishop_square_mod[pos];
-        num_w_bishops++;
-    }
-    if (num_w_bishops >= 2) {
-        white_score += BISHOP_PAIR_BONUS;
-    }
-
-    // White Rooks
-    while (bitboard_white[ROOK]) {
-        Pos board_pos = pop_pos(bitboard_white[ROOK]);
-        Mask attack = rook_atk_mask(occupancy, board_pos);
-        add_king_pressure<ROOK>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
-        Pos pos = invert_pos(board_pos);
-        white_score += ROOK_VALUE + b_rook_square_mod[pos];
-
-        if (!(all_pawns & col_mask(pos % 8))) {
-            white_score += ROOK_OPEN_FILE_BONUS;
-        } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
-            white_score += ROOK_SEMI_OPEN_FILE_BONUS;
-        }
-    }
-
-    // White Queens
-    while (bitboard_white[QUEEN]) {
-        Pos board_pos = pop_pos(bitboard_white[QUEEN]);
-        Mask attack = queen_atk_mask(occupancy, board_pos);
-        add_king_pressure<QUEEN>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
-        Pos pos = invert_pos(board_pos);
-        white_score += QUEEN_VALUE + b_queen_square_mod[pos];
-
-        if (!(all_pawns & col_mask(pos % 8))) {
-            white_score += QUEEN_OPEN_FILE_BONUS;
-        } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
-            white_score += QUEEN_SEMI_OPEN_FILE_BONUS;
-        }
-    }
-
-    // White Pawns
-    while (bitboard_white[PAWN]) {
-        Pos pos = invert_pos(pop_pos(bitboard_white[PAWN]));
-        white_score += PAWN_VALUE + b_pawn_square_mod[pos];
-    }
-
-    Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
-    white_score += static_cast<i32>(
-        (1.0f - endgame) * b_king_square_mod[king_pos_w] +
-        endgame * b_king_square_mod_end[king_pos_w]);
-
-    // ------------ Black -----------------------
-
-    // Black Knights
-    while (bitboard_black[KNIGHT]) {
-        Pos board_pos = pop_pos(bitboard_black[KNIGHT]);
-        Mask attack = knight_atk_mask(board_pos);
-        add_king_pressure<KNIGHT>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
-        Pos pos = board_pos;
-        black_score += KNIGHT_VALUE + b_knight_square_mod[pos];
-    }
-
-    // Black Bishops
-    u8 num_b_bishops = 0;
-    while (bitboard_black[BISHOP]) {
-        Pos board_pos = pop_pos(bitboard_black[BISHOP]);
-        Mask attack = bishop_atk_mask(occupancy, board_pos);
-        add_king_pressure<BISHOP>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
-        Pos pos = board_pos;
-        black_score += BISHOP_VALUE + b_bishop_square_mod[pos];
-        num_b_bishops++;
-    }
-    if (num_b_bishops >= 2)
-        black_score += BISHOP_PAIR_BONUS;
-
-    // Black Rooks
-    while (bitboard_black[ROOK]) {
-        Pos board_pos = pop_pos(bitboard_black[ROOK]);
-        Mask attack = rook_atk_mask(occupancy, board_pos);
-        add_king_pressure<ROOK>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
-        Pos pos = board_pos;
-        black_score += ROOK_VALUE + b_rook_square_mod[pos];
-
-        if (!(all_pawns & col_mask(pos % 8))) {
-            black_score += ROOK_OPEN_FILE_BONUS;
-        } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
-            black_score += ROOK_SEMI_OPEN_FILE_BONUS;
-        }
-    }
-
-    // Black Queens
-    while (bitboard_black[QUEEN]) {
-        Pos board_pos = pop_pos(bitboard_black[QUEEN]);
-        Mask attack = queen_atk_mask(occupancy, board_pos);
-        add_king_pressure<QUEEN>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
-        Pos pos = board_pos;
-        black_score += QUEEN_VALUE + b_queen_square_mod[pos];
-
-        if (!(all_pawns & col_mask(pos % 8))) {
-            black_score += QUEEN_OPEN_FILE_BONUS;
-        } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
-            black_score += QUEEN_SEMI_OPEN_FILE_BONUS;
-        }
-    }
-
-    // Black Pawns
-    while (bitboard_black[PAWN]) {
-        Pos pos = pop_pos(bitboard_black[PAWN]);
-        black_score += PAWN_VALUE + b_pawn_square_mod[pos];
-    }
-
-    Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);
-    black_score += static_cast<i32>(
-        (1.0f - endgame) * b_king_square_mod[king_pos_b] +
-        endgame * b_king_square_mod_end[king_pos_b]);
-
-    const i32 wp = weights[WHITE] * coordination_mult[std::min(counts[WHITE], 5)] / 100;
-    const i32 bp = weights[BLACK] * coordination_mult[std::min(counts[BLACK], 5)] / 100;
-    white_score += static_cast<i32>((1.0f - endgame) * (shields[WHITE] - safety_table[std::min(wp, 99)]));
-    black_score += static_cast<i32>((1.0f - endgame) * (shields[BLACK] - safety_table[std::min(bp, 99)]));
-
-    const i32 result = (game.turn == WHITE) ? white_score - black_score : black_score - white_score;
-
-    return result;
-}
-
-
-i32 eval_game(Game& game) {
-    const f32 endgame = endgame_ratio(game);
-    // Used for indexing arrays
-    const u8 endgame_bin = (endgame > 0.5f) ? 1 : 0;
 
     Bitboard bitboard_white = game.players[WHITE].bb;
     Bitboard bitboard_black = game.players[BLACK].bb;
@@ -406,14 +301,18 @@ i32 eval_game(Game& game) {
     const Mask w_queens = bitboard_white[QUEEN];
     const Mask b_queens = bitboard_black[QUEEN];
 
-    Mask all_pawns = bitboard_white[PAWN] | bitboard_black[PAWN];
+    const Mask all_pawns = bitboard_white[PAWN] | bitboard_black[PAWN];
 
-    i32 white_score = 0;
-    i32 black_score = 0;
+    // Accumulate middlegame and endgame scores from White's perspective.
+    i32 mg_score = 0;
+    i32 eg_score = 0;
 
     // Pawn structure
-    white_score += eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE);
-    black_score += eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+    const i32 pawn_structure =
+        eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE) -
+        eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+    mg_score += pawn_structure;
+    eg_score += pawn_structure;
 
     // White Pawns
     Mask pawn_attacks_w = 0;
@@ -422,7 +321,8 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(w_pawns);
         pawn_attacks_w |= white_pawn_atk_mask(board_pos);
         Pos pos = invert_pos(board_pos);
-        white_score += PAWN_VALUE + b_pawn_square_mod[pos];
+        mg_score += mg_piece_value[PAWN] + mg_pawn_table[pos];
+        eg_score += eg_piece_value[PAWN] + eg_pawn_table[pos];
     }
 
     // Black Pawns
@@ -431,7 +331,8 @@ i32 eval_game(Game& game) {
     while (b_pawns) {
         Pos pos = pop_pos(b_pawns);
         pawn_attacks_b |= black_pawn_atk_mask(pos);
-        black_score += PAWN_VALUE + b_pawn_square_mod[pos];
+        mg_score -= mg_piece_value[PAWN] + mg_pawn_table[pos];
+        eg_score -= eg_piece_value[PAWN] + eg_pawn_table[pos];
     }
 
     // King positions/mask
@@ -457,12 +358,13 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_white[KNIGHT]);
         Mask attack = knight_atk_mask(board_pos);
 
-        i32 mob_bonus = KNIGHT_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)][endgame_bin];
+        const auto& mob_bonus = KNIGHT_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
 
         add_king_pressure<KNIGHT>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
 
         Pos pos = invert_pos(board_pos);
-        white_score += KNIGHT_VALUE + b_knight_square_mod[pos] + mob_bonus;
+        mg_score += mg_piece_value[KNIGHT] + mg_knight_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[KNIGHT] + eg_knight_table[pos] + mob_bonus[1];
     }
 
     // White Bishops
@@ -471,16 +373,18 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_white[BISHOP]);
         Mask attack = bishop_atk_mask(occupancy ^ b_queens, board_pos);
 
-        i32 mob_bonus = BISHOP_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)][endgame_bin];
+        const auto& mob_bonus = BISHOP_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
 
         add_king_pressure<BISHOP>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
 
         Pos pos = invert_pos(board_pos);
-        white_score += BISHOP_VALUE + b_bishop_square_mod[pos] + mob_bonus;
+        mg_score += mg_piece_value[BISHOP] + mg_bishop_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[BISHOP] + eg_bishop_table[pos] + mob_bonus[1];
         num_w_bishops++;
     }
     if (num_w_bishops >= 2) {
-        white_score += BISHOP_PAIR_BONUS;
+        mg_score += BISHOP_PAIR_BONUS;
+        eg_score += BISHOP_PAIR_BONUS;
     }
 
     // White Rooks
@@ -488,17 +392,20 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_white[ROOK]);
         Mask attack = rook_atk_mask(occupancy ^ b_queens ^ w_rooks, board_pos);
 
-        i32 mob_bonus = ROOK_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)][endgame_bin];
+        const auto& mob_bonus = ROOK_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
 
         add_king_pressure<ROOK>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
 
         Pos pos = invert_pos(board_pos);
-        white_score += ROOK_VALUE + b_rook_square_mod[pos] + mob_bonus;
+        mg_score += mg_piece_value[ROOK] + mg_rook_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[ROOK] + eg_rook_table[pos] + mob_bonus[1];
 
         if (!(all_pawns & col_mask(pos % 8))) {
-            white_score += ROOK_OPEN_FILE_BONUS;
+            mg_score += ROOK_OPEN_FILE_BONUS;
+            eg_score += ROOK_OPEN_FILE_BONUS;
         } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
-            white_score += ROOK_SEMI_OPEN_FILE_BONUS;
+            mg_score += ROOK_SEMI_OPEN_FILE_BONUS;
+            eg_score += ROOK_SEMI_OPEN_FILE_BONUS;
         }
     }
 
@@ -507,24 +414,26 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_white[QUEEN]);
         Mask attack = queen_atk_mask(occupancy, board_pos);
 
-        i32 mob_bonus = QUEEN_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)][endgame_bin];
+        const auto& mob_bonus = QUEEN_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
 
         add_king_pressure<QUEEN>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
 
         Pos pos = invert_pos(board_pos);
-        white_score += QUEEN_VALUE + b_queen_square_mod[pos] + mob_bonus;
+        mg_score += mg_piece_value[QUEEN] + mg_queen_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[QUEEN] + eg_queen_table[pos] + mob_bonus[1];
 
         if (!(all_pawns & col_mask(pos % 8))) {
-            white_score += QUEEN_OPEN_FILE_BONUS;
+            mg_score += QUEEN_OPEN_FILE_BONUS;
+            eg_score += QUEEN_OPEN_FILE_BONUS;
         } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
-            white_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+            mg_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+            eg_score += QUEEN_SEMI_OPEN_FILE_BONUS;
         }
     }
 
     Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
-    white_score += static_cast<i32>(
-        (1.0f - endgame) * b_king_square_mod[king_pos_w] +
-        endgame * b_king_square_mod_end[king_pos_w]);
+    mg_score += mg_king_table[king_pos_w];
+    eg_score += eg_king_table[king_pos_w];
 
     // ------------ Black -----------------------
 
@@ -533,11 +442,12 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_black[KNIGHT]);
         Mask attack = knight_atk_mask(board_pos);
 
-        i32 mob_bonus = KNIGHT_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)][endgame_bin];
+        const auto& mob_bonus = KNIGHT_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
 
         add_king_pressure<KNIGHT>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
         Pos pos = board_pos;
-        black_score += KNIGHT_VALUE + b_knight_square_mod[pos] + mob_bonus;
+        mg_score -= mg_piece_value[KNIGHT] + mg_knight_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[KNIGHT] + eg_knight_table[pos] + mob_bonus[1];
     }
 
     // Black Bishops
@@ -546,31 +456,37 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_black[BISHOP]);
         Mask attack = bishop_atk_mask(occupancy ^ w_queens, board_pos);
 
-        i32 mob_bonus = BISHOP_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)][endgame_bin];
+        const auto& mob_bonus = BISHOP_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
 
         add_king_pressure<BISHOP>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
         Pos pos = board_pos;
-        black_score += BISHOP_VALUE + b_bishop_square_mod[pos] + mob_bonus;
+        mg_score -= mg_piece_value[BISHOP] + mg_bishop_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[BISHOP] + eg_bishop_table[pos] + mob_bonus[1];
         num_b_bishops++;
     }
-    if (num_b_bishops >= 2)
-        black_score += BISHOP_PAIR_BONUS;
+    if (num_b_bishops >= 2) {
+        mg_score -= BISHOP_PAIR_BONUS;
+        eg_score -= BISHOP_PAIR_BONUS;
+    }
 
     // Black Rooks
     while (bitboard_black[ROOK]) {
         Pos board_pos = pop_pos(bitboard_black[ROOK]);
         Mask attack = rook_atk_mask(occupancy ^ w_queens ^ b_rooks, board_pos);
 
-        i32 mob_bonus = ROOK_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)][endgame_bin];
+        const auto& mob_bonus = ROOK_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
 
         add_king_pressure<ROOK>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
         Pos pos = board_pos;
-        black_score += ROOK_VALUE + b_rook_square_mod[pos] + mob_bonus;
+        mg_score -= mg_piece_value[ROOK] + mg_rook_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[ROOK] + eg_rook_table[pos] + mob_bonus[1];
 
         if (!(all_pawns & col_mask(pos % 8))) {
-            black_score += ROOK_OPEN_FILE_BONUS;
+            mg_score -= ROOK_OPEN_FILE_BONUS;
+            eg_score -= ROOK_OPEN_FILE_BONUS;
         } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
-            black_score += ROOK_SEMI_OPEN_FILE_BONUS;
+            mg_score -= ROOK_SEMI_OPEN_FILE_BONUS;
+            eg_score -= ROOK_SEMI_OPEN_FILE_BONUS;
         }
     }
 
@@ -579,32 +495,272 @@ i32 eval_game(Game& game) {
         Pos board_pos = pop_pos(bitboard_black[QUEEN]);
         Mask attack = queen_atk_mask(occupancy, board_pos);
 
-        i32 mob_bonus = QUEEN_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)][endgame_bin];
+        const auto& mob_bonus = QUEEN_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
 
         add_king_pressure<QUEEN>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
         Pos pos = board_pos;
-        black_score += QUEEN_VALUE + b_queen_square_mod[pos] + mob_bonus;
+        mg_score -= mg_piece_value[QUEEN] + mg_queen_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[QUEEN] + eg_queen_table[pos] + mob_bonus[1];
 
         if (!(all_pawns & col_mask(pos % 8))) {
-            black_score += QUEEN_OPEN_FILE_BONUS;
+            mg_score -= QUEEN_OPEN_FILE_BONUS;
+            eg_score -= QUEEN_OPEN_FILE_BONUS;
         } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
-            black_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+            mg_score -= QUEEN_SEMI_OPEN_FILE_BONUS;
+            eg_score -= QUEEN_SEMI_OPEN_FILE_BONUS;
         }
     }
 
     Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);
-    black_score += static_cast<i32>(
-        (1.0f - endgame) * b_king_square_mod[king_pos_b] +
-        endgame * b_king_square_mod_end[king_pos_b]);
+    mg_score -= mg_king_table[king_pos_b];
+    eg_score -= eg_king_table[king_pos_b];
 
     const i32 wp = weights[WHITE] * coordination_mult[std::min(counts[WHITE], 5)] / 100;
     const i32 bp = weights[BLACK] * coordination_mult[std::min(counts[BLACK], 5)] / 100;
-    white_score += static_cast<i32>((1.0f - endgame) * (shields[WHITE] - safety_table[std::min(wp, 99)]));
-    black_score += static_cast<i32>((1.0f - endgame) * (shields[BLACK] - safety_table[std::min(bp, 99)]));
+    mg_score += shields[WHITE] - safety_table[std::min(wp, 99)];
+    mg_score -= shields[BLACK] - safety_table[std::min(bp, 99)];
 
-    const i32 result = (game.turn == WHITE) ? white_score - black_score : black_score - white_score;
+    const i32 score = static_cast<i32>(
+        (1.0f - endgame) * mg_score + endgame * eg_score);
 
-    return result;
+    return (game.turn == WHITE) ? score : -score;
+}
+
+
+i32 eval_game(Game& game) {
+    const f32 endgame = endgame_ratio(game);
+
+    Bitboard bitboard_white = game.players[WHITE].bb;
+    Bitboard bitboard_black = game.players[BLACK].bb;
+
+    const Mask w_rooks = bitboard_white[ROOK];
+    const Mask b_rooks = bitboard_black[ROOK];
+    const Mask w_queens = bitboard_white[QUEEN];
+    const Mask b_queens = bitboard_black[QUEEN];
+
+    const Mask all_pawns = bitboard_white[PAWN] | bitboard_black[PAWN];
+
+    // Accumulate middlegame and endgame scores from White's perspective.
+    i32 mg_score = 0;
+    i32 eg_score = 0;
+
+    // Pawn structure
+    const i32 pawn_structure =
+        eval_pawn_structure(bitboard_white[PAWN], bitboard_black[PAWN], WHITE) -
+        eval_pawn_structure(bitboard_black[PAWN], bitboard_white[PAWN], BLACK);
+    mg_score += pawn_structure;
+    eg_score += pawn_structure;
+
+    // White Pawns
+    Mask pawn_attacks_w = 0;
+    Mask w_pawns = bitboard_white[PAWN];
+    while (w_pawns) {
+        Pos board_pos = pop_pos(w_pawns);
+        pawn_attacks_w |= white_pawn_atk_mask(board_pos);
+        Pos pos = invert_pos(board_pos);
+        mg_score += mg_piece_value[PAWN] + mg_pawn_table[pos];
+        eg_score += eg_piece_value[PAWN] + eg_pawn_table[pos];
+    }
+
+    // Black Pawns
+    Mask pawn_attacks_b = 0;
+    Mask b_pawns = bitboard_black[PAWN];
+    while (b_pawns) {
+        Pos pos = pop_pos(b_pawns);
+        pawn_attacks_b |= black_pawn_atk_mask(pos);
+        mg_score -= mg_piece_value[PAWN] + mg_pawn_table[pos];
+        eg_score -= eg_piece_value[PAWN] + eg_pawn_table[pos];
+    }
+
+    // King positions/mask
+    const Pos kings[2] = {Pos(__builtin_ctzll(bitboard_white[KING])), Pos(__builtin_ctzll(bitboard_black[KING]))};
+    const Mask zones[2] = {calc_king_zone<WHITE>(kings[0]), calc_king_zone<BLACK>(kings[1])};
+
+    const Mask occupancy = bitboard_white.occupancy() | bitboard_black.occupancy();
+
+    // Inspiration from old stockfish
+    // Mask for area where we can have useful movement
+    const Mask mobility_area_white = ~(bitboard_white[PAWN] | pawn_attacks_b | bitboard_white[KING]);
+    const Mask mobility_area_black = ~(bitboard_black[PAWN] | pawn_attacks_w | bitboard_black[KING]);
+
+    // Shield bonus/penalty and attacker counts + weights
+    const i32 shields[2] = {eval_pawn_shield(game.players, kings[0], WHITE), eval_pawn_shield(game.players, kings[1], BLACK)};
+    i32 counts[2] = {};
+    i32 weights[2] = {};
+
+    // ------------ White ------------
+
+    // White Knights
+    while (bitboard_white[KNIGHT]) {
+        Pos board_pos = pop_pos(bitboard_white[KNIGHT]);
+        Mask attack = knight_atk_mask(board_pos);
+
+        const auto& mob_bonus = KNIGHT_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
+
+        add_king_pressure<KNIGHT>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
+
+        Pos pos = invert_pos(board_pos);
+        mg_score += mg_piece_value[KNIGHT] + mg_knight_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[KNIGHT] + eg_knight_table[pos] + mob_bonus[1];
+    }
+
+    // White Bishops
+    u8 num_w_bishops = 0;
+    while (bitboard_white[BISHOP]) {
+        Pos board_pos = pop_pos(bitboard_white[BISHOP]);
+        Mask attack = bishop_atk_mask(occupancy ^ b_queens, board_pos);
+
+        const auto& mob_bonus = BISHOP_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
+
+        add_king_pressure<BISHOP>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
+
+        Pos pos = invert_pos(board_pos);
+        mg_score += mg_piece_value[BISHOP] + mg_bishop_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[BISHOP] + eg_bishop_table[pos] + mob_bonus[1];
+        num_w_bishops++;
+    }
+    if (num_w_bishops >= 2) {
+        mg_score += BISHOP_PAIR_BONUS;
+        eg_score += BISHOP_PAIR_BONUS;
+    }
+
+    // White Rooks
+    while (bitboard_white[ROOK]) {
+        Pos board_pos = pop_pos(bitboard_white[ROOK]);
+        Mask attack = rook_atk_mask(occupancy ^ b_queens ^ w_rooks, board_pos);
+
+        const auto& mob_bonus = ROOK_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
+
+        add_king_pressure<ROOK>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
+
+        Pos pos = invert_pos(board_pos);
+        mg_score += mg_piece_value[ROOK] + mg_rook_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[ROOK] + eg_rook_table[pos] + mob_bonus[1];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            mg_score += ROOK_OPEN_FILE_BONUS;
+            eg_score += ROOK_OPEN_FILE_BONUS;
+        } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
+            mg_score += ROOK_SEMI_OPEN_FILE_BONUS;
+            eg_score += ROOK_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    // White Queens
+    while (bitboard_white[QUEEN]) {
+        Pos board_pos = pop_pos(bitboard_white[QUEEN]);
+        Mask attack = queen_atk_mask(occupancy, board_pos);
+
+        const auto& mob_bonus = QUEEN_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_white)];
+
+        add_king_pressure<QUEEN>(zones[BLACK], attack, counts[BLACK], weights[BLACK]);
+
+        Pos pos = invert_pos(board_pos);
+        mg_score += mg_piece_value[QUEEN] + mg_queen_table[pos] + mob_bonus[0];
+        eg_score += eg_piece_value[QUEEN] + eg_queen_table[pos] + mob_bonus[1];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            mg_score += QUEEN_OPEN_FILE_BONUS;
+            eg_score += QUEEN_OPEN_FILE_BONUS;
+        } else if (!(bitboard_white[PAWN] & col_mask(pos % 8))) {
+            mg_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+            eg_score += QUEEN_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    Pos king_pos_w = invert_pos(__builtin_ctzll(bitboard_white[KING]));
+    mg_score += mg_king_table[king_pos_w];
+    eg_score += eg_king_table[king_pos_w];
+
+    // ------------ Black -----------------------
+
+    // Black Knights
+    while (bitboard_black[KNIGHT]) {
+        Pos board_pos = pop_pos(bitboard_black[KNIGHT]);
+        Mask attack = knight_atk_mask(board_pos);
+
+        const auto& mob_bonus = KNIGHT_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
+
+        add_king_pressure<KNIGHT>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
+        Pos pos = board_pos;
+        mg_score -= mg_piece_value[KNIGHT] + mg_knight_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[KNIGHT] + eg_knight_table[pos] + mob_bonus[1];
+    }
+
+    // Black Bishops
+    u8 num_b_bishops = 0;
+    while (bitboard_black[BISHOP]) {
+        Pos board_pos = pop_pos(bitboard_black[BISHOP]);
+        Mask attack = bishop_atk_mask(occupancy ^ w_queens, board_pos);
+
+        const auto& mob_bonus = BISHOP_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
+
+        add_king_pressure<BISHOP>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
+        Pos pos = board_pos;
+        mg_score -= mg_piece_value[BISHOP] + mg_bishop_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[BISHOP] + eg_bishop_table[pos] + mob_bonus[1];
+        num_b_bishops++;
+    }
+    if (num_b_bishops >= 2) {
+        mg_score -= BISHOP_PAIR_BONUS;
+        eg_score -= BISHOP_PAIR_BONUS;
+    }
+
+    // Black Rooks
+    while (bitboard_black[ROOK]) {
+        Pos board_pos = pop_pos(bitboard_black[ROOK]);
+        Mask attack = rook_atk_mask(occupancy ^ w_queens ^ b_rooks, board_pos);
+
+        const auto& mob_bonus = ROOK_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
+
+        add_king_pressure<ROOK>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
+        Pos pos = board_pos;
+        mg_score -= mg_piece_value[ROOK] + mg_rook_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[ROOK] + eg_rook_table[pos] + mob_bonus[1];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            mg_score -= ROOK_OPEN_FILE_BONUS;
+            eg_score -= ROOK_OPEN_FILE_BONUS;
+        } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
+            mg_score -= ROOK_SEMI_OPEN_FILE_BONUS;
+            eg_score -= ROOK_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    // Black Queens
+    while (bitboard_black[QUEEN]) {
+        Pos board_pos = pop_pos(bitboard_black[QUEEN]);
+        Mask attack = queen_atk_mask(occupancy, board_pos);
+
+        const auto& mob_bonus = QUEEN_MOBILITY_BONUS[__builtin_popcountll(attack & mobility_area_black)];
+
+        add_king_pressure<QUEEN>(zones[WHITE], attack, counts[WHITE], weights[WHITE]);
+        Pos pos = board_pos;
+        mg_score -= mg_piece_value[QUEEN] + mg_queen_table[pos] + mob_bonus[0];
+        eg_score -= eg_piece_value[QUEEN] + eg_queen_table[pos] + mob_bonus[1];
+
+        if (!(all_pawns & col_mask(pos % 8))) {
+            mg_score -= QUEEN_OPEN_FILE_BONUS;
+            eg_score -= QUEEN_OPEN_FILE_BONUS;
+        } else if (!(bitboard_black[PAWN] & col_mask(pos % 8))) {
+            mg_score -= QUEEN_SEMI_OPEN_FILE_BONUS;
+            eg_score -= QUEEN_SEMI_OPEN_FILE_BONUS;
+        }
+    }
+
+    Pos king_pos_b = __builtin_ctzll(bitboard_black[KING]);
+    mg_score -= mg_king_table[king_pos_b];
+    eg_score -= eg_king_table[king_pos_b];
+
+    const i32 wp = weights[WHITE] * coordination_mult[std::min(counts[WHITE], 5)] / 100;
+    const i32 bp = weights[BLACK] * coordination_mult[std::min(counts[BLACK], 5)] / 100;
+    mg_score += shields[WHITE] - safety_table[std::min(wp, 99)];
+    mg_score -= shields[BLACK] - safety_table[std::min(bp, 99)];
+
+    const i32 score = static_cast<i32>(
+        (1.0f - endgame) * mg_score + endgame * eg_score);
+
+    return (game.turn == WHITE) ? score : -score;
 }
 
 f32 endgame_ratio(const Game& game) {
