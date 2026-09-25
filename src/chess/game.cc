@@ -532,7 +532,7 @@ bool Game::is_insuff() {
         return false;
       }
 
-      Mask wait_bishops = act.bb[BISHOP];
+      Mask wait_bishops = wait.bb[BISHOP];
 
       if (wait_bishops == 0) {
         // If waiting player has no bishops, it is not a draw
