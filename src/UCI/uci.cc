@@ -18,7 +18,7 @@
 namespace {
 
 constexpr unsigned int DEFAULT_MOVE_TIME_MS = 800;
-constexpr unsigned int MIN_SEARCH_TIME_MS = 300;
+constexpr unsigned int MIN_SEARCH_TIME_MS = 100;
 constexpr unsigned int DEFAULT_MOVE_OVERHEAD_MS = 100;
 constexpr unsigned int MAX_MOVE_OVERHEAD_MS = 5000;
 
@@ -197,11 +197,8 @@ Move go(Game& game, unsigned int requested_time, Searcher& searcher) {
     return Move::null();
   }
 
-  Move best_move = legal_moves[0];
-  if (requested_time >= MIN_SEARCH_TIME_MS) {
-    searcher.set_search_time(requested_time);
-    best_move = searcher.get_best_move_parallel(game);
-  }
+  searcher.set_search_time(std::min(MIN_SEARCH_TIME_MS, requested_time));
+  Move best_move = searcher.get_best_move_parallel(game);
 
   return best_move;
 }
