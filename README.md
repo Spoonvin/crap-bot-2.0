@@ -12,6 +12,10 @@ SDL3 and SDL3-image are only required when building the GUI.
 make all
 ```
 
+To make an optimized pgo build, use `make pgo`. This runs a script that 
+profiles the code then builds with the obtained profile information. This
+takes a while to complete and also writes data to your tmp directory.
+
 Run the search and UCI regression tests with `make test` (requires Python 3).
 
 To build with the GUI, install SDL3 and SDL3-image, then run:

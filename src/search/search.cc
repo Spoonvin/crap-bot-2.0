@@ -6,6 +6,7 @@
 #include "search/trans_table.h"
 #include "search/zobrist_hash.h"
 
+#include <algorithm>
 #include <limits>
 #include <chrono>
 #include <iostream>
@@ -219,8 +220,6 @@ i32 Searcher::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_nul
     if (gen_result.check != NO_CHECK)
         depth++;
 
-    f32 eg_ratio = endgame_ratio(game);
-    
     if (do_null && (gen_result.check == NO_CHECK) && (ply > 0) && (depth >= 4) &&
         game.player_has_non_pawn_piece()) {
 
@@ -384,6 +383,7 @@ void Searcher::iterative_deepening(Game& game) {
             break;
 
         prev_score = score;
+        max_finished_depth = iter_depth;
 
         iter_depth++;
 
@@ -401,6 +401,9 @@ void Searcher::iterative_deepening(Game& game) {
 
 Move Searcher::get_best_move(Game& game) {
 
+    node_count = 0;
+    max_finished_depth = 0;
+
     Move book_move = this->book.lookup_position(game);
     if (!book_move.is_null())
         return book_move;
@@ -412,9 +415,6 @@ Move Searcher::get_best_move(Game& game) {
     iterative_deepening(game);
 
     this->trans_table->age++;
-
-    //std::cout << "Node searched: " << node_count << "\n";
-    this->node_count = 0;
 
     return root_move;
 }
@@ -545,6 +545,9 @@ void Searcher::record_trans_table(u64 hash, u8 depth, Move move, i32 score, TTTy
 
 Move Searcher::get_best_move_parallel(Game& game) {
 
+    node_count = 0;
+    max_finished_depth = 0;
+
     Move book_move = this->book.lookup_position(game);
     if (!book_move.is_null())
         return book_move;
@@ -554,11 +557,17 @@ Move Searcher::get_best_move_parallel(Game& game) {
          + std::chrono::milliseconds(search_time);
 
     std::vector<std::thread> threads;
+    struct WorkerDiagnostics {
+        u64 node_count = 0;
+        u8 max_finished_depth = 0;
+    };
+    std::vector<WorkerDiagnostics> worker_diagnostics(thread_count);
 
     for (unsigned int i = 1; i < thread_count; i++) {
-        threads.emplace_back([searcher = *this, game, i]() mutable {
+        threads.emplace_back([searcher = *this, game, i, &worker_diagnostics]() mutable {
             searcher.set_thread_id(i);
             searcher.iterative_deepening(game);
+            worker_diagnostics[i] = {searcher.node_count, searcher.max_finished_depth};
         });
     }
 
@@ -568,11 +577,13 @@ Move Searcher::get_best_move_parallel(Game& game) {
         t.join();
     }
 
+    for (const auto& diagnostics : worker_diagnostics) {
+        node_count += diagnostics.node_count;
+        max_finished_depth = std::max(max_finished_depth, diagnostics.max_finished_depth);
+    }
+
     // The generation is shared but non-atomic; all TT users have now stopped.
     this->trans_table->age++;
-
-    //std::cout << "Node searched: " << node_count << "\n";
-    this->node_count = 0;
 
     return root_move;
 }

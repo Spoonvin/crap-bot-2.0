@@ -32,7 +32,7 @@ TARGET = app
 TEST_TARGET = $(BUILD_DIR)/search_test
 TEST_OBJ = $(BUILD_DIR)/tests/search_test.o
 
-.PHONY: all clean test FORCE
+.PHONY: all clean test FORCE pgo
 
 # Default target
 all: $(TARGET)
@@ -40,6 +40,9 @@ all: $(TARGET)
 # Link
 $(TARGET): $(OBJ) FORCE
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJ) -o $@ $(LDLIBS)
+
+pgo:
+	CXXFLAGS='$(CXXFLAGS)' bash scripts/build-pgo.sh
 
 test: $(TEST_TARGET) $(TARGET)
 	./$(TEST_TARGET)

@@ -40,7 +40,10 @@ struct Searcher {
     // The two most recent quiet cutoffs at each ply, newest first.
     Move killers[MAX_PLY][2];
 
-    i32 node_count;
+    // Latest search diagnostics: total nodes and deepest completed iteration
+    // across all workers. Nodes include quiescence and interrupted iterations.
+    u64 node_count;
+    u8 max_finished_depth = 0;
 
     public:
 

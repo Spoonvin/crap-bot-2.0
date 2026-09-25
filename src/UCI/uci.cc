@@ -197,7 +197,7 @@ Move go(Game& game, unsigned int requested_time, Searcher& searcher) {
     return Move::null();
   }
 
-  searcher.set_search_time(std::min(MIN_SEARCH_TIME_MS, requested_time));
+  searcher.set_search_time(std::max(MIN_SEARCH_TIME_MS, requested_time));
   Move best_move = searcher.get_best_move_parallel(game);
 
   return best_move;

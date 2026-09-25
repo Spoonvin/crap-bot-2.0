@@ -17,7 +17,7 @@
 namespace {
 
 Searcher* timed_searcher = nullptr;
-i32 expire_at_node = 0;
+u64 expire_at_node = 0;
 std::function<bool()> expire_on_clock;
 
 void require(bool condition, const char* message) {
@@ -29,7 +29,7 @@ void require(bool condition, const char* message) {
 
 // Advance the clock at a chosen node, without sleeps or a racing stop thread.
 struct ExpireAfterNodes {
-    ExpireAfterNodes(Searcher& searcher, i32 nodes) {
+    ExpireAfterNodes(Searcher& searcher, u64 nodes) {
         timed_searcher = &searcher;
         expire_at_node = nodes;
     }
@@ -44,6 +44,7 @@ void reset(Searcher& searcher) {
     searcher.root_move = Move::null();
     searcher.stop_search = false;
     searcher.node_count = 0;
+    searcher.max_finished_depth = 0;
     searcher.deadline = std::chrono::steady_clock::now() + std::chrono::hours(1);
     for (auto& ply_killers : searcher.killers)
         std::fill(std::begin(ply_killers), std::end(ply_killers), Move::null());
@@ -517,15 +518,23 @@ void test_zero_time_and_terminal_positions(Searcher& searcher) {
         require(searcher.book.lookup_position(game).is_null(),
                 "fallback test must search outside the opening book");
         searcher.root_move = Move::normal(0, 63); // Stale move from another position.
+        searcher.node_count = 123;
+        searcher.max_finished_depth = 12;
         const Move result = parallel ? searcher.get_best_move_parallel(game)
                                      : searcher.get_best_move(game);
         require(result.data == moves[0].data,
                 "zero-time searches must return a legal fallback, not a stale or null move");
+        require(searcher.node_count == 0 && searcher.max_finished_depth == 0,
+                "zero-time searches must clear previous diagnostics");
 
+        searcher.node_count = 123;
+        searcher.max_finished_depth = 12;
         game = Game::from_fen("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
         const Move terminal = parallel ? searcher.get_best_move_parallel(game)
                                        : searcher.get_best_move(game);
         require(terminal.is_null(), "a root with no legal moves must return a null move");
+        require(searcher.node_count == 0 && searcher.max_finished_depth == 0,
+                "terminal positions must clear previous diagnostics");
     }
 }
 
@@ -564,7 +573,7 @@ void test_interrupted_aspiration_retry(Searcher& searcher) {
         return entry.is_valid() && entry.get_depth() == 3 && entry.get_type() == LOWER;
     };
     timed_searcher = &searcher;
-    expire_at_node = std::numeric_limits<i32>::max();
+    expire_at_node = std::numeric_limits<u64>::max();
 
     const Move result = searcher.get_best_move(game);
     expire_on_clock = {};
@@ -572,6 +581,8 @@ void test_interrupted_aspiration_retry(Searcher& searcher) {
 
     require(changed_scores && searcher.stop_search,
             "the search must stop during the depth-3 aspiration retry");
+    require(searcher.node_count > 0 && searcher.max_finished_depth == 2,
+            "interrupted retries must retain nodes but not advance finished depth");
     require(searcher.trans_table->get(root_hash).get_move().data == better.data,
             "the failed aspiration attempt must have found a different candidate");
     require(result.data == previous.data,

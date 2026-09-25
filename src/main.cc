@@ -122,6 +122,9 @@ void test_fen(i32 argc, char** argv) {
 
   std::cout << "Best move: " << buffer << "\n";
   std::cout << "Eval: " << eval << "\n";
+  std::cout << "Node count: " << test_searcher.node_count << "\n";
+  std::cout << "Max finished depth: "
+            << static_cast<unsigned int>(test_searcher.max_finished_depth) << "\n";
 
 }
 
