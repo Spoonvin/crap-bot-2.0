@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <climits>
 #include <condition_variable>
 #include <cstdlib>
@@ -190,21 +191,41 @@ unsigned int time_for_go(const std::string& arguments, Color turn,
   return DEFAULT_MOVE_TIME_MS;
 }
 
-Move go(Game& game, unsigned int requested_time, Searcher& searcher) {
+struct SearchResult {
+  Move best_move = Move::null();
+  Move ponder_move = Move::null();
+};
+
+SearchResult go(Game& game, unsigned int requested_time, Searcher& searcher,
+                bool ponder_enabled) {
+  SearchResult result;
   MoveList legal_moves;
   const GenResult generated = gen_legal(game, legal_moves);
   if (generated.count == 0) {
-    return Move::null();
+    return result;
   }
 
   searcher.set_search_time(std::max(MIN_SEARCH_TIME_MS, requested_time));
-  Move best_move = searcher.get_best_move_parallel(game);
+  result.best_move = searcher.get_best_move_parallel(game);
+  if (!ponder_enabled || result.best_move.is_null()) return result;
 
-  return best_move;
+  Game copy = game;
+  copy.make_move(result.best_move);
+
+  // Only advertise a cached reply if it is legal after our best move.
+  const Move prediction = searcher.trans_table->get_pv_move(copy.hash);
+  const GenResult replies = gen_legal(copy, legal_moves);
+  for (u8 index = 0; index < replies.count; ++index) {
+    if (legal_moves[index].data == prediction.data) {
+      result.ponder_move = prediction;
+      break;
+    }
+  }
+  return result;
 }
 
 void set_option(const std::string& arguments, Searcher& searcher,
-                unsigned int& overhead) {
+                unsigned int& overhead, bool& ponder_enabled) {
   std::istringstream input(arguments);
   std::string token, name, value, extra;
   if (!(input >> token) || token != "name") return;
@@ -212,10 +233,15 @@ void set_option(const std::string& arguments, Searcher& searcher,
     if (!name.empty()) name += ' ';
     name += token;
   }
-  if (token != "value" || !(input >> value) || (input >> extra) ||
-      !is_decimal(value)) return;
+  if (token != "value" || !(input >> value) || (input >> extra)) return;
   std::transform(name.begin(), name.end(), name.begin(),
                  [](unsigned char c) { return std::tolower(c); });
+  if (name == "ponder") {
+    if (value == "true") ponder_enabled = true;
+    if (value == "false") ponder_enabled = false;
+    return;
+  }
+  if (!is_decimal(value)) return;
   const unsigned int number = parse_nonnegative(value);
   if (name == "move overhead" && number <= MAX_MOVE_OVERHEAD_MS) {
     overhead = number;
@@ -238,15 +264,19 @@ void loop() {
   Game game = Game::initial();
   Searcher searcher(DEFAULT_MOVE_TIME_MS);
   unsigned int overhead = DEFAULT_MOVE_OVERHEAD_MS;
+  bool ponder_enabled = false;
   std::thread worker;
-  std::mutex stop_mutex;
-  std::condition_variable stopped;
+  std::mutex state_mutex;
+  std::condition_variable state_changed;
+  bool pondering = false;
+  unsigned int ponder_time = 0;
   auto stop = [&] {
     {
-      std::lock_guard<std::mutex> lock(stop_mutex);
+      std::lock_guard<std::mutex> lock(state_mutex);
+      pondering = false;
       searcher.cancel->store(true, std::memory_order_relaxed);
     }
-    stopped.notify_all();
+    state_changed.notify_all();
     if (worker.joinable()) worker.join();
   };
   std::string line;
@@ -262,6 +292,7 @@ void loop() {
            "id author Spoonvin\n"
            "option name Move Overhead type spin default 100 min 0 max 5000\n"
            "option name Threads type spin default 4 min 1 max 128\n"
+           "option name Ponder type check default false\n"
            "option name Hash type spin default " +
            std::to_string(TT_SIZE * sizeof(TTSlot) / (1024 * 1024)) +
            " min 1 max 4096\nuciok");
@@ -269,7 +300,7 @@ void loop() {
       send("readyok");
     } else if (command == "setoption") {
       stop();
-      set_option(arguments, searcher, overhead);
+      set_option(arguments, searcher, overhead, ponder_enabled);
     } else if (command == "ucinewgame") {
       stop();
       game = Game::initial();
@@ -287,21 +318,60 @@ void loop() {
       std::istringstream parameters(arguments);
       std::string parameter;
       bool infinite = false;
-      while (parameters >> parameter) infinite |= parameter == "infinite";
-      worker = std::thread([&, position = game, duration, infinite]() mutable {
-        const Move best_move = go(position, duration, searcher);
-        if (infinite) {
-          std::unique_lock<std::mutex> lock(stop_mutex);
-          stopped.wait(lock, [&] { return searcher.cancel->load(std::memory_order_relaxed); });
+      bool ponder = false;
+      while (parameters >> parameter) {
+        infinite |= parameter == "infinite";
+        ponder |= parameter == "ponder";
+      }
+      {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        pondering = ponder;
+        ponder_time = std::max(MIN_SEARCH_TIME_MS, duration);
+        // Set this before starting the worker so even an immediate ponderhit
+        // cannot be overwritten by search initialization.
+        searcher.shared_deadline = ponder
+            ? std::make_shared<std::atomic<std::chrono::steady_clock::time_point>>(
+                  std::chrono::steady_clock::time_point::max())
+            : nullptr;
+      }
+      worker = std::thread([&, position = game, duration, infinite, ponder_enabled]() mutable {
+        // The GUI's position already includes the predicted opponent move.
+        const SearchResult result = go(position, duration, searcher, ponder_enabled);
+        {
+          std::unique_lock<std::mutex> lock(state_mutex);
+          state_changed.wait(lock, [&] {
+            return searcher.cancel->load(std::memory_order_relaxed) ||
+                (!pondering && !infinite);
+          });
+        }
+
+        if (result.best_move.is_null()) {
+          send("bestmove 0000");
+          return;
         }
         char algebraic[6];
-        if (best_move.is_null()) {
-          send("bestmove 0000");
-        } else {
-          best_move.store_alg(algebraic);
-          send(std::string("bestmove ") + algebraic);
+        result.best_move.store_alg(algebraic);
+        std::string message = std::string("bestmove ") + algebraic;
+        if (!result.ponder_move.is_null()) {
+          result.ponder_move.store_alg(algebraic);
+          message += std::string(" ponder ") + algebraic;
         }
+        send(message);
       });
+    } else if (command == "ponderhit") {
+      {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        if (pondering) {
+          // All search threads keep their work and share the new time limit.
+          if (ponder_time != UINT_MAX) {
+            searcher.shared_deadline->store(
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(ponder_time),
+                std::memory_order_relaxed);
+          }
+          pondering = false;
+        }
+      }
+      state_changed.notify_all();
     } else if (command == "stop") {
       stop();
     } else if (command == "quit") {

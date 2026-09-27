@@ -325,8 +325,10 @@ i32 Searcher::pvs(i32 alpha, i32 beta, u8 depth, u8 ply, Game& game, bool do_nul
 
 bool Searcher::check_deadline() {
 
+    const auto limit = shared_deadline
+        ? shared_deadline->load(std::memory_order_relaxed) : deadline;
     if (!cancel->load(std::memory_order_relaxed) &&
-        std::chrono::steady_clock::now() < deadline) return false;
+        std::chrono::steady_clock::now() < limit) return false;
 
     stop_search = true;
     return true;
@@ -345,7 +347,7 @@ void Searcher::iterative_deepening(Game& game) {
     i32 prev_score = 0;
 
     while (!stop_search && iter_depth < MAX_PLY &&
-           std::chrono::steady_clock::now() < deadline) {
+           !check_deadline()) {
 
         const Move completed_move = root_move;
 

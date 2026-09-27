@@ -36,7 +36,9 @@ constexpr i32 KING_ADJACENT_SEMI_OPEN_FILE_PENALTY = 10;
 
 Mask WHITE_PASSED_TABLE[64];
 Mask BLACK_PASSED_TABLE[64];
-constexpr i32 PASSED_PAWN_BONUS[8] = {0, 5, 10, 20, 40, 70, 100, 0};
+// Pawns on rank 7 are passed by definition, so no extra bonus.
+// The bonus already comes from ps-tables
+constexpr i32 PASSED_PAWN_BONUS[8] = {0, 5, 10, 20, 40, 60, 0, 0};
 
 // How dangerous attacks from these pieces are to the king
 constexpr i32 king_attack_weights[PIECE_COUNT] = {

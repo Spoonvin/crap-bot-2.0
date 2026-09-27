@@ -60,6 +60,7 @@ class UciTest(unittest.TestCase):
         for name in ("Move Overhead", "Threads", "Hash"):
             self.assertTrue(any(line.startswith(f"option name {name} type spin ")
                                 for line in self.handshake))
+        self.assertIn("option name Ponder type check default false", self.handshake)
         self.send("setoption name Move Overhead value 100",
                   "setoption name Threads value 8",
                   "ucinewgame",
@@ -97,6 +98,125 @@ class UciTest(unittest.TestCase):
             self.lines.get(timeout=0.1)
         self.send("stop")
         self.until("bestmove", timeout=1)
+
+    def test_ponder_waits_for_hit_after_early_completion(self):
+        # Book, checkmate, stalemate, and drawn roots can all finish immediately.
+        for position in (
+            "position startpos",
+            "position fen 7k/6Q1/5K2/8/8/8/8/8 b - - 0 1",
+            "position fen 7k/5K2/6Q1/8/8/8/8/8 b - - 0 1",
+            "position fen 7k/8/8/8/8/8/8/K7 w - - 0 1",
+        ):
+            with self.subTest(position=position):
+                self.send(position, "go ponder movetime 1", "isready")
+                self.assertEqual(self.until("readyok", timeout=1), ["readyok"])
+                with self.assertRaises(queue.Empty):
+                    self.lines.get(timeout=0.2)
+                self.send("ponderhit", "ponderhit")
+                self.assertRegex(self.until("bestmove", timeout=1)[-1],
+                                 r"^bestmove (0000|[a-h][1-8][a-h][1-8][qrbn]?)$")
+                self.send("isready")
+                self.assertEqual(self.until("readyok"), ["readyok"])
+
+    def test_ponderhit_starts_clock_for_all_workers(self):
+        self.send("setoption name Move Overhead value 0",
+                  "setoption name Threads value 8")
+        for turn, clocks in (("w", "wtime 300 btime 30000"),
+                             ("b", "wtime 30000 btime 300")):
+            with self.subTest(turn=turn):
+                position = POSITION.replace(" w ", f" {turn} ")
+                self.send(f"position fen {position}",
+                          f"go ponder {clocks} movestogo 1", "isready")
+                self.assertEqual(self.until("readyok", timeout=1), ["readyok"])
+                # Pondering must outlast the normal search budget.
+                with self.assertRaises(queue.Empty):
+                    self.lines.get(timeout=0.4)
+                start = time.monotonic()
+                self.send("ponderhit")
+                with self.assertRaises(queue.Empty):
+                    self.lines.get(timeout=0.1)
+                self.assertRegex(self.until("bestmove", timeout=2)[-1],
+                                 r"^bestmove [a-h]")
+                self.assertLess(time.monotonic() - start, 2)
+                # A later normal search must not inherit the ponder deadline.
+                self.send("go movetime 1")
+                self.until("bestmove", timeout=1)
+
+    def test_immediate_ponderhit_and_stop(self):
+        for commands in (("ponderhit",), ("ponderhit", "ponderhit"),
+                         ("stop",), ("ponderhit", "stop")):
+            with self.subTest(commands=commands):
+                self.send(f"position fen {POSITION}", "go ponder movetime 1",
+                          *commands)
+                self.assertRegex(self.until("bestmove", timeout=1)[-1],
+                                 r"^bestmove [a-h]")
+                self.send("stop", "ponderhit", "isready")
+                self.assertEqual(self.until("readyok"), ["readyok"])
+
+    def test_stop_while_pondering_and_ponder_miss(self):
+        for position in ("position startpos", f"position fen {POSITION}"):
+            with self.subTest(position=position):
+                self.send(position, "go ponder movetime 1", "isready")
+                self.assertEqual(self.until("readyok", timeout=1), ["readyok"])
+                with self.assertRaises(queue.Empty):
+                    self.lines.get(timeout=0.2)
+                self.send("stop")
+                self.until("bestmove", timeout=1)
+                self.send("position startpos moves f2f3 e7e5 g2g4",
+                          "go movetime 300")
+                self.assertEqual(self.until("bestmove")[-1], "bestmove d8h4")
+
+    def test_ponder_infinite_still_requires_stop_after_hit(self):
+        self.send("position startpos", "go ponder infinite", "ponderhit", "isready")
+        self.assertEqual(self.until("readyok", timeout=1), ["readyok"])
+        with self.assertRaises(queue.Empty):
+            self.lines.get(timeout=0.1)
+        self.send("stop")
+        self.until("bestmove", timeout=1)
+
+    def test_ponder_option_and_legal_prediction(self):
+        self.send("setoption name Ponder value true",
+                  "setoption name Threads value 1",
+                  "setoption name Hash value 16",
+                  f"position fen {POSITION}", "go movetime 500")
+        result = self.until("bestmove")[-1]
+        self.assertRegex(result, r"^bestmove [a-h][1-8][a-h][1-8][qrbn]? "
+                                 r"ponder [a-h][1-8][a-h][1-8][qrbn]?$")
+        _, best, _, reply = result.split()
+        # An invalid move sequence leaves the previous (checkmated) position.
+        self.send("position fen 7k/6Q1/5K2/8/8/8/8/8 b - - 0 1",
+                  f"position fen {POSITION} moves {best} {reply}", "go movetime 1")
+        self.assertNotEqual(self.until("bestmove")[-1], "bestmove 0000")
+        self.send("setoption name Ponder value false",
+                  f"position fen {POSITION}", "go movetime 1")
+        self.assertRegex(self.until("bestmove")[-1],
+                         r"^bestmove [a-h][1-8][a-h][1-8][qrbn]?$")
+
+    def test_commands_replace_ponder_search(self):
+        for command in ("position startpos", "ucinewgame",
+                        "setoption name Hash value 2", "go movetime 1"):
+            with self.subTest(command=command):
+                self.send(f"position fen {POSITION}", "go ponder movetime 1",
+                          command)
+                self.until("bestmove", timeout=1)
+                if command.startswith("go"):
+                    self.until("bestmove", timeout=1)
+                self.send("ponderhit", "isready")
+                self.assertEqual(self.until("readyok"), ["readyok"])
+
+    def test_eof_while_pondering(self):
+        self.send("position startpos", "go ponder", "isready")
+        self.until("readyok", timeout=1)
+        self.engine.stdin.close()
+        self.send = lambda *commands: None
+        self.engine.wait(timeout=1)
+
+    def test_quit_while_pondering(self):
+        self.send(f"position fen {POSITION}", "go ponder", "isready")
+        self.until("readyok", timeout=1)
+        self.send("quit")
+        self.engine.wait(timeout=1)
+        self.send = lambda *commands: None
 
     def test_terminal_and_promotion_positions(self):
         self.send("position fen 7k/6Q1/5K2/8/8/8/8/8 b - - 0 1", "go movetime 1")

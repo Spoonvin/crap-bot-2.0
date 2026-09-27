@@ -411,6 +411,41 @@ void test_parallel_search(Searcher& searcher) {
     }
 }
 
+void test_shared_search_deadline(Searcher& searcher) {
+    reset(searcher);
+    searcher.set_search_time(0);
+    searcher.shared_deadline =
+        std::make_shared<std::atomic<std::chrono::steady_clock::time_point>>(
+            std::chrono::steady_clock::time_point::max());
+    Searcher worker = searcher;
+    Game game = Game::from_fen("4k3/7p/8/8/8/8/P7/4K3 w - - 0 1");
+    const std::string before = fen(game);
+    const u64 hash = game.hash;
+    require(worker.book.lookup_position(game).is_null(),
+            "shared deadline test must search outside the opening book");
+
+    timed_searcher = &worker;
+    expire_at_node = std::numeric_limits<u64>::max();
+    expire_on_clock = [&] {
+        if (worker.node_count >= 100) {
+            // The controller changes the deadline after its worker has started.
+            searcher.shared_deadline->store(
+                std::chrono::steady_clock::time_point::min(),
+                std::memory_order_relaxed);
+        }
+        return false;
+    };
+    const Move result = worker.get_best_move(game);
+    expire_on_clock = {};
+    timed_searcher = nullptr;
+    searcher.shared_deadline.reset();
+
+    require(worker.node_count >= 100 && worker.stop_search && !result.is_null(),
+            "a shared deadline must override local time and accept live updates");
+    require(fen(game) == before && game.hash == hash && game.state_stack.size == 0,
+            "shared deadline interruption must restore the position");
+}
+
 void test_saved_pv_first(Searcher& searcher) {
     reset(searcher);
     Game game = Game::initial();
@@ -660,6 +695,7 @@ int main() {
     test_quiescence_in_check(searcher);
     test_ply_limit(searcher);
     test_parallel_search(searcher);
+    test_shared_search_deadline(searcher);
     test_saved_pv_first(searcher);
     test_root_bound_does_not_select_move(searcher);
     test_fail_low_preserves_move(searcher);

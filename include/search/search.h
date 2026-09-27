@@ -26,6 +26,10 @@ struct Searcher {
     std::chrono::steady_clock::time_point deadline =
         std::chrono::steady_clock::time_point::max();
 
+    // Optional caller-controlled deadline, shared by all search workers.
+    // Assign/reset only while idle; its value may change during a search.
+    std::shared_ptr<std::atomic<std::chrono::steady_clock::time_point>> shared_deadline;
+
     bool stop_search = false;
 
     // Shared by all workers; reset by the caller before starting a new search.
