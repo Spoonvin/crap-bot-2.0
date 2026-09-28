@@ -264,6 +264,13 @@ struct MoveGenerator {
   }
 
   u8 gen_pawn_pshs(Mask restrict, MoveList& moves, u8 count) {
+    if (non_quiet_generation) {
+      // Only generate promotions
+      restrict = (turn == WHITE) ? 
+        restrict & ROW_7 :
+        restrict & ROW_0;
+    }
+
     switch (turn) {
       case WHITE: {
         return gen_wpawn_pshs(restrict, moves, count);
@@ -395,7 +402,9 @@ struct MoveGenerator {
     u8 count = 0;
 
     if (!non_quiet_generation) count = gen_cstl(moves, count);
-    if (!non_quiet_generation) count = gen_pawn_pshs(FULL_BOARD, moves, count);
+    // Filtering out regular pushes in non-quiet gen is
+    // handled inside the function
+    count = gen_pawn_pshs(FULL_BOARD, moves, count);
     Mask restrict = (non_quiet_generation) ? wait_cc : FULL_BOARD; 
     count = gen_atks(restrict, moves, count);
 
